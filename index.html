@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'none'">
+<title>Bitora ScreenFlow</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<aside><div class="brand"><span class="logo">◉</span><span>Bitora<small>ScreenFlow</small></span></div><div class="caption">ВАША СТУДИЯ ЗАПИСИ</div>
+<nav><button id="recordTab" class="nav active">◉ <span>Запись экрана</span></button><button id="libraryTab" class="nav">▤ <span>Мои записи</span><b id="count">0</b></button></nav>
+<div class="aside-bottom"><span class="local-dot"></span> Всё остаётся на вашем ПК<p>Без аккаунта. Без облака.<br>Без водяных знаков.</p><small>Bitora ScreenFlow · 1.1</small></div></aside>
+<main>
+<header><div><div class="eyebrow">BITORA SCREENFLOW / СТУДИЯ</div><h1 id="pageTitle">Запишите важное.</h1><p id="pageSubtitle">Рабочие процессы, идеи и моменты — в одном видео.</p></div><span id="status" class="badge">Готов к записи</span></header>
+<div id="message" role="alert" hidden></div>
+<section id="recordView">
+<div class="workspace">
+<div class="preview-panel"><div class="panel-heading"><span>ПРЕДПРОСМОТР</span><span id="sourceLabel">Источник не выбран</span></div>
+<div class="preview"><img id="thumbnail" alt="Выбранный источник" hidden><video id="preview" autoplay muted playsinline hidden></video><div id="empty"><div class="monitor">▣</div><h2>Что будем записывать?</h2><p>Выберите экран или отдельное окно</p><button id="choose" class="secondary">Выбрать источник ↗</button></div><div id="countdown" hidden></div></div>
+<div class="preview-footer"><span id="codecLabel">WEBM · ЛОКАЛЬНАЯ ЗАПИСЬ</span><button id="change" class="text-button" disabled>Изменить источник</button></div></div>
+<div class="settings"><div class="panel-heading">НАСТРОЙКИ ЗАПИСИ</div>
+<label>Частота кадров<select id="fps"><option value="30">30 кадров/с · стандарт</option><option value="60">60 кадров/с · плавно</option><option value="15">15 кадров/с · презентации</option></select></label>
+<label>Качество<select id="quality"><option value="8000000">Высокое · 8 Мбит/с</option><option value="16000000">Максимальное · 16 Мбит/с</option><option value="4000000">Компактное · 4 Мбит/с</option></select></label>
+<div class="divider"></div>
+<label class="toggle-row"><span>Звук компьютера<small>Все системные звуки</small></span><input id="systemAudio" type="checkbox" checked></label>
+<label class="toggle-row"><span>Микрофон<small>Комментарий к записи</small></span><input id="mic" type="checkbox"></label>
+<select id="micDevice" aria-label="Микрофон" disabled><option value="">По умолчанию</option></select>
+<div class="divider"></div>
+<label class="toggle-row"><span>Отсчёт 3 секунды</span><input id="delay" type="checkbox" checked></label>
+<label class="toggle-row"><span>Свернуть при старте</span><input id="minimize" type="checkbox" checked></label>
+</div></div>
+<div class="transport"><div class="timer-block"><span id="recordDot"></span><div><div id="timer">00:00:00</div><small id="size">Ожидание записи</small></div></div><div class="controls"><button id="pause" class="secondary" disabled>Ⅱ Пауза</button><button id="stop" class="secondary" disabled>■ Завершить</button><button id="start" class="primary" disabled>● Начать запись</button></div></div>
+<div class="tips"><span><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> старт / стоп</span><span><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> пауза</span><span>Видео сохраняется автоматически</span></div>
+<div class="note">Звук компьютера записывается целиком, даже при выборе отдельного окна. Для записи только голоса выключите системный звук.</div>
+</section>
+<section id="libraryView" hidden><div class="library-toolbar"><div><strong>Папка сохранения</strong><p id="folderPath"></p></div><button id="chooseFolder" class="secondary">Изменить</button><button id="openFolder" class="secondary">Открыть папку ↗</button></div><div id="recordings"></div></section>
+</main>
+<dialog id="picker"><div class="dialog-header"><div><h2>Выберите источник</h2><p>Экран целиком или только нужное окно</p></div><button id="closePicker" class="secondary" aria-label="Закрыть">✕</button></div><div id="sources"></div><button id="refresh" class="secondary">Обновить список</button></dialog>
+<script src="renderer.js"></script></body></html>

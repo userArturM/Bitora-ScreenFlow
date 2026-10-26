@@ -1,0 +1,81 @@
+{
+  "name": "bitora-screenflow",
+  "version": "1.1.0",
+  "description": "Локальная запись экрана",
+  "author": "Bitora",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "package:win": "electron-builder --win nsis portable --x64 --publish never",
+    "dist:win": "electron-builder --win nsis portable --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "productName": "Bitora ScreenFlow",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/userArturM/bitora.git"
+  },
+  "build": {
+    "appId": "com.bitora.screenflow",
+    "productName": "Bitora ScreenFlow",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "recording-store.js",
+      "index.html",
+      "style.css",
+      "package.json",
+      "LICENSE",
+      "assets/icon.ico"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Bitora ScreenFlow",
+      "installerLanguages": [
+        "ru_RU",
+        "en_US"
+      ],
+      "language": "1049",
+      "artifactName": "Bitora-ScreenFlow-Setup-${version}-${arch}.${ext}",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "Bitora-ScreenFlow-Portable-${version}-${arch}.${ext}",
+      "requestExecutionLevel": "user"
+    },
+    "publish": null
+  }
+}
