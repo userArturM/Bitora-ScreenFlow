@@ -32,6 +32,7 @@ jobs:
         shell: pwsh
         run: |
           function Test-App($exe) {
+            Write-Host "Testing startup: $exe"
             $p = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
             if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "Startup timed out: $exe" }
             if ($p.ExitCode -ne 0) { throw "Startup failed ($($p.ExitCode)): $exe" }
@@ -39,12 +40,14 @@ jobs:
           Test-App "$pwd/release/win-unpacked/Bitora ScreenFlow.exe"
           $installer = (Get-ChildItem release/*Setup*.exe | Select-Object -First 1).FullName
           $portable = (Get-ChildItem release/*Portable*.exe | Select-Object -First 1).FullName
-          $installDir = "$env:RUNNER_TEMP/BitoraInstalled"
-          $p = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
-          Test-App "$installDir/Bitora ScreenFlow.exe"
           Test-App $portable
           if (-not (Test-Path 'release/BitoraScreenFlow-Data/Settings')) { throw 'Portable settings folder missing' }
+          $installDir = Join-Path $env:LOCALAPPDATA 'BitoraScreenFlow-CI'
+          Write-Host "Installing to: $installDir"
+          $p = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
+          Get-ChildItem $installDir
+          Test-App (Join-Path $installDir 'Bitora ScreenFlow.exe')
           $uninstaller = (Get-ChildItem "$installDir/Uninstall*.exe" | Select-Object -First 1).FullName
           if (-not $uninstaller) { throw 'Uninstaller missing' }
           $p = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
