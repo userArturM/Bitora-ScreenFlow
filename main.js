@@ -8,7 +8,7 @@ const {SettingsStore} = require('./settings-store');
 const media = require('./media-tools');
 const S = require('./shared');
 const {validatePng,savePng} = require('./screenshot-store');
-require('electron').protocol.registerSchemesAsPrivileged([{scheme:'bitora-media',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
+require('electron').protocol.registerSchemesAsPrivileged([{scheme:'bitora-media',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);
 const functionalTest=process.argv.includes('--functional-test');
 const portableRoot = process.env.PORTABLE_EXECUTABLE_DIR;
 const portableData = portableRoot ? path.join(portableRoot,'BitoraScreenFlow-Data') : null;

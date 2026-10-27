@@ -62,6 +62,16 @@ jobs:
           if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'Special path source test timed out' }
           if (Test-Path $env:BITORA_DIAGNOSTIC_REPORT) { Get-Content $env:BITORA_DIAGNOSTIC_REPORT }
           if ($p.ExitCode -ne 0) { throw "Special path source test failed: $($p.ExitCode)" }
+      - name: Functional studio test before packaging
+        shell: pwsh
+        run: |
+          $env:BITORA_TEST_OUTPUT = Join-Path $env:RUNNER_TEMP 'BitoraSourceFunctional'
+          $electron = Join-Path $pwd 'node_modules/electron/dist/electron.exe'
+          $p = Start-Process -FilePath $electron -ArgumentList '. --functional-test' -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'Source functional tests timed out' }
+          if (Test-Path "$env:BITORA_TEST_OUTPUT/error.txt") { Get-Content "$env:BITORA_TEST_OUTPUT/error.txt" }
+          if ($p.ExitCode -ne 0) { throw "Source functional tests failed: $($p.ExitCode)" }
+          Get-Content "$env:BITORA_TEST_OUTPUT/result.json"
       - name: Build Windows packages
         run: npm run dist:win
         env:
