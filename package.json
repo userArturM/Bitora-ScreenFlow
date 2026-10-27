@@ -1,6 +1,6 @@
 {
   "name": "bitora-screenflow",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Локальная запись экрана",
   "author": "Bitora",
   "license": "MIT",
@@ -44,7 +44,8 @@
       "assets/icon.ico",
       "screenshot-store.js",
       "qa/functional.cjs",
-      "app-trust.js"
+      "app-trust.js",
+      "assets/logo.png"
     ],
     "asar": true,
     "win": {
@@ -79,7 +80,9 @@
       ],
       "language": "1049",
       "artifactName": "Bitora-ScreenFlow-Setup-${version}-${arch}.${ext}",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
     },
     "portable": {
       "artifactName": "Bitora-ScreenFlow-Portable-${version}-${arch}.${ext}",
