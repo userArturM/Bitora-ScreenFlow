@@ -133,6 +133,7 @@ jobs:
             "$hash  $($_.Name)"
           } | Set-Content -Encoding ascii release/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: Bitora-ScreenFlow-Windows
           path: |
