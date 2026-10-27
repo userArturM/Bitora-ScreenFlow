@@ -1,0 +1,1 @@
+body{margin:0;padding:18px 12px;background:#181d28;color:#eef2fa;display:flex;gap:8px;align-items:center;font:13px 'Segoe UI',sans-serif;app-region:drag}button{app-region:no-drag;background:#283323;color:#c9f798;border:1px solid #536244;border-radius:7px;padding:8px;cursor:pointer}#time{font-variant-numeric:tabular-nums}meter{width:32px}#stop{color:#ffaaaa}

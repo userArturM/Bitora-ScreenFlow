@@ -47,8 +47,34 @@ module.exports=async({win,store,media,nativeImage})=>{
   assert.ok((await media.thumbnail(ffmpeg,video,duration))?.length>100);
   const decoded=await media.run(ffmpeg,['-v','error','-i',video,'-map','0:v:0','-map','0:a:0','-f','null','-'],{timeoutMs:20000});
   assert.equal(decoded.code,0,decoded.stderr);
+  // Studio: editor saves a new image, clipboard and gallery remain usable.
+  await js('(async()=>{await openEditor(await api.mediaUrl("image",lastScreenshot.name));pushUndo();drawAnnotation({x:20,y:20},{x:150,y:100});$("editSave").click();})()');
+  await wait('$("editStatus").textContent.startsWith("Сохранено:")');
+  await js('$("editCopy").click()');
+  await wait('$("editStatus").textContent.includes("буфер")');
+  await js('$("editorDialog").close();tab(true)');
+  await wait('$("recordings").children.length>=4');
+  // In-app streaming protocol must support video metadata and seeking.
+  await js(`openPlayer({name:${JSON.stringify(files[0])}})`);
+  await wait('Number.isFinite($("playerVideo").duration)&&$("playerVideo").duration>0');
+  const clipped=await js(`api.trimVideo(${JSON.stringify(files[0])},0.2,1.2)`);
+  const clipDuration=await media.probeDuration(ffmpeg,path.join(store.directory,clipped));
+  assert.ok(clipDuration>0.8&&clipDuration<1.3,'Trim duration');
+  await js('$("playerDialog").close();tab(false);regionSelection={x:0,y:0,width:320,height:240,sourceWidth:'+first.width+',sourceHeight:'+first.height+'};start()');
+  await wait('state==="recording"');
+  await new Promise(r=>setTimeout(r,1400));
+  await js('takeScreenshot()');
+  assert.equal(await js('lastScreenshot.width'),320);
+  assert.equal(await js('lastScreenshot.height'),240);
+  await js('$("shotPreview").close();stop()');
+  await wait('state==="idle"',30000);
+  const allVideos=(await fs.readdir(store.directory)).filter(n=>n.endsWith('.webm')&&n!==files[0]);
+  assert.equal(allVideos.length,1);
+  const cropCheck=await media.run(ffmpeg,['-i',path.join(store.directory,allVideos[0]),'-f','null','-'],{timeoutMs:20000});
+  assert.equal(cropCheck.code,0);assert.match(cropCheck.stderr,/320x240/);
+  await js('regionSelection=null');
   await js('window.__testAudio.close();navigator.mediaDevices.getDisplayMedia=async()=>{throw new DOMException("Permission denied","NotAllowedError")};start()');
   assert.equal(await js('state'),'idle');
   assert.equal(await js('capture'),null);
-  return {passed:true,checks:['actual CI desktop capture','full-resolution idle PNG','PNG while recorder paused','pause/resume timer','WebM video and synthetic audio decode','FFmpeg repair and thumbnail','permission denial cleanup'],screenshot:{width:first.width,height:first.height},duration};
+  return {passed:true,checks:['actual CI desktop capture','full-resolution idle PNG','PNG while recorder paused','pause/resume timer','WebM video and synthetic audio decode','FFmpeg repair and thumbnail','permission denial cleanup','editor save and clipboard','unified gallery','in-app playback','precise trim export','320x240 region recording and PNG'],screenshot:{width:first.width,height:first.height},duration};
 };

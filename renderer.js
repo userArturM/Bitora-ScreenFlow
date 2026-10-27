@@ -33,9 +33,9 @@ function message(text,error=false,details='') {
   close.className='dismiss';close.setAttribute('aria-label','Закрыть сообщение');close.append(icon('close'));close.onclick=()=>{box.hidden=true;};
   box.replaceChildren(body,close);box.className=error?'error':'';box.hidden=false;
 }
-function fail(prefix,error) {const h=humanizeError(error);message((prefix?prefix+' ':'')+h.text,true,h.details);}
+function fail(prefix,error) {api.diagnosticLog(prefix,String(error)).catch(()=>{});const h=humanizeError(error);message((prefix?prefix+' ':'')+h.text,true,h.details);}
 
-function reportState() {api.state({state,elapsed:Math.floor(elapsed/1000)}).catch(()=>{});}
+function reportState() {window.studioReport?.();api.state({state,elapsed:Math.floor(elapsed/1000)}).catch(()=>{});}
 function updateUI() {
   const idle=state==='idle'&&!takingShot, active=['recording','paused'].includes(state);
   $('start').hidden=active;$('start').disabled=!idle||!source;
@@ -125,7 +125,7 @@ async function microphoneDevices() {
   finally {stream?.getTracks().forEach(t=>t.stop());}
 }
 async function cleanup() {
-  stopMeter();
+  await window.studioCleanup?.();stopMeter();
   capture?.getTracks().forEach(t=>t.stop());microphone?.getTracks().forEach(t=>t.stop());
   capture=null;microphone=null;
   if(audioContext) {await audioContext.close().catch(()=>{});audioContext=null;}
@@ -146,14 +146,14 @@ async function start() {
       deviceId:$('micDevice').value?{exact:$('micDevice').value}:undefined,echoCancellation:true,noiseSuppression:true
     }});
     const audioTracks=[...capture.getAudioTracks(),...(microphone?.getAudioTracks()||[])];
-    const output=new MediaStream(capture.getVideoTracks());
+    const output=new MediaStream(await window.studioVideoTracks(capture));
     if(audioTracks.length) {
       audioContext=new AudioContext();await audioContext.resume();
       const destination=audioContext.createMediaStreamDestination();
       analyser=audioContext.createAnalyser();analyser.fftSize=1024;
       for(const track of audioTracks) {
         const input=audioContext.createMediaStreamSource(new MediaStream([track]));
-        const gain=audioContext.createGain();gain.gain.value=audioTracks.length>1?0.7:1;
+        const gain=audioContext.createGain();const isMic=microphone?.getAudioTracks().includes(track);gain.gain.value=Number($(isMic?'micVolume':'systemVolume').value)/100;window.studioGain?.(isMic?'mic':'system',gain);
         input.connect(gain).connect(destination);gain.connect(analyser);
       }
       output.addTrack(destination.stream.getAudioTracks()[0]);
@@ -237,7 +237,7 @@ async function takeScreenshot() {
     });
     if(!video.videoWidth||!video.videoHeight) throw new Error('Источник не передаёт изображение.');
     const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;
-    canvas.getContext('2d').drawImage(video,0,0);
+    window.studioDrawFrame(canvas,video);
     const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Не удалось создать PNG.')),'image/png'));
     lastScreenshot=await api.screenshotSave(new Uint8Array(await blob.arrayBuffer()));
     $('shotImage').src=canvas.toDataURL('image/png');
@@ -335,7 +335,7 @@ function tab(library) {
   $('libraryTab').classList.toggle('active',library);$('recordTab').classList.toggle('active',!library);
   $(library?'libraryTab':'recordTab').setAttribute('aria-current','page');$(library?'recordTab':'libraryTab').removeAttribute('aria-current');
   $('pageTitle').textContent=library?'Всё, что вы записали.':'Запишите важное.';
-  $('pageSubtitle').textContent=library?'Ваши видео хранятся только на этом компьютере.':'Рабочие процессы, идеи и моменты — в одном видео.';
+  $('pageSubtitle').textContent=library?'Видео и скриншоты хранятся только на этом компьютере.':'Рабочие процессы, идеи и моменты — в одном видео.';
   if(library) {loadLibrary();refreshDisk();}
 }
 
@@ -389,6 +389,7 @@ window.addEventListener('screenflow-toggle',()=>{if(capturingHotkey) return;if(s
 api.onCommand(command=>{
   if(command==='toggle' && !capturingHotkey) {if(state==='idle') start();else stop();}
   if(command==='pause') pause();
+  if(command==='screenshot') takeScreenshot();
   if(command==='stop') stop();
   if(command==='close') {
     if(state==='saving') {closeAfter=true;return;}

@@ -1,6 +1,6 @@
 {
   "name": "bitora-screenflow",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "Локальная запись экрана",
   "author": "Bitora",
   "license": "MIT",
@@ -45,7 +45,14 @@
       "screenshot-store.js",
       "qa/functional.cjs",
       "app-trust.js",
-      "assets/logo.png"
+      "assets/logo.png",
+      "studio-main.js",
+      "studio-shared.js",
+      "studio.js",
+      "panel.html",
+      "panel.js",
+      "panel.css",
+      "panel-preload.js"
     ],
     "asar": true,
     "win": {
