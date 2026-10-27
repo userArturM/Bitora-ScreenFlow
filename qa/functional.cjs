@@ -2,7 +2,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const assert=require('node:assert/strict');
 module.exports=async({win,store,media,nativeImage})=>{
-  const js=async code=>{try{return await win.webContents.executeJavaScript(`(async()=>{try{return await eval(${JSON.stringify(code)})}catch(e){throw new Error(String(e?.stack||e?.message||e))}})()`,true);}catch(e){throw new Error('Renderer scenario failed: '+code.slice(0,220)+'; '+String(e?.stack||e?.message||e));}};
+  const js=async code=>{try{return await win.webContents.executeJavaScript(code,true);}catch(e){throw new Error('Renderer scenario failed: '+code.slice(0,300)+'; '+String(e?.stack||e?.message||e));}};
   const wait=async(code,timeout=20000)=>{
     const end=Date.now()+timeout;
     while(Date.now()<end) {if(await js(code))return;await new Promise(r=>setTimeout(r,100));}
