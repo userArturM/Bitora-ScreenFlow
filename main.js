@@ -2,6 +2,7 @@ const {app,BrowserWindow,ipcMain,desktopCapturer,session,dialog,shell,globalShor
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {pathToFileURL} = require('node:url');
+const {isAppPageURL,isTrustedFrame,isTrustedSender} = require('./app-trust');
 const {RecordingStore} = require('./recording-store');
 const {SettingsStore} = require('./settings-store');
 const media = require('./media-tools');
@@ -29,8 +30,9 @@ const busyFiles = new Set();
 const infoCache = new Map();
 let screenshotWasVisible=false;
 const screenshotFiles=new Map();
-const page = pathToFileURL(path.join(__dirname,'index.html')).href;
-function trusted(event) { if(event.sender !== win.webContents || event.senderFrame?.url !== page) throw new Error('Доступ запрещён'); }
+const appPage=path.join(__dirname,'index.html');
+const page=pathToFileURL(appPage).href;
+function trusted(event) { if(!isTrustedSender(event,win?.webContents,appPage)) throw new Error('Доступ запрещён'); }
 function handle(name,fn) { ipcMain.handle(name,async(event,...args)=>{trusted(event);return fn(...args);}); }
 function validFile(name) { return path.join(store.directory,S.validateRecordingName(name)); }
 function sendCommand(command) { if(win && !win.isDestroyed()) win.webContents.send('command',command); }
@@ -92,11 +94,11 @@ app.whenReady().then(async()=>{
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',(e)=>e.preventDefault());
   session.defaultSession.setPermissionRequestHandler((contents,permission,callback)=>{
-    callback(contents===win.webContents && contents.getURL()===page && ['media','display-capture'].includes(permission));
+    callback(contents===win.webContents && isTrustedFrame(contents,contents.mainFrame,appPage) && ['media','display-capture'].includes(permission));
   });
   session.defaultSession.setDisplayMediaRequestHandler(async(request,callback)=>{
     try {
-      if(request.frame?.url!==page || !selected) return callback(null);
+      if(!isTrustedFrame(win.webContents,request.frame,appPage) || !selected) return callback(null);
       const sources = await desktopCapturer.getSources({types:['screen','window']});
       const source = sources.find(s=>s.id===selected.id);
       const audio = selected.audio;
@@ -282,6 +284,8 @@ app.whenReady().then(async()=>{
   if(functionalTest) {
     try {
       const result=await require('./qa/functional.cjs')({win,store,media,nativeImage});
+      result.legacyUrlEqual=win.webContents.mainFrame.url===page;
+      result.normalizedPageAccepted=isAppPageURL(win.webContents.mainFrame.url,appPage);
       await fs.writeFile(path.join(process.env.BITORA_TEST_OUTPUT,'result.json'),JSON.stringify(result,null,2));
       app.exit(0);
     } catch(error) {
@@ -292,7 +296,15 @@ app.whenReady().then(async()=>{
     return;
   }
   if(smokeTest) {
-    const ok=await win.webContents.executeJavaScript('document.title === "Bitora ScreenFlow" && typeof window.desktop.begin === "function" && typeof window.Shared === "object" && document.getElementById("start") !== null');
+    const ok=await win.webContents.executeJavaScript(`(async()=>{
+      if(document.title!=="Bitora ScreenFlow"||typeof window.desktop.begin!=="function"||!window.Shared||!document.getElementById("start"))return false;
+      try {
+        const cfg=await window.desktop.config();
+        const library=await window.desktop.library();
+        const sources=await window.desktop.sources();
+        return !!cfg.hotkeys && typeof library.folder==="string" && Array.isArray(sources) && sources.length>0;
+      }catch{return false;}
+    })()`);
     app.exit(ok?0:3);
   }
 }).catch(error=>{dialog.showErrorBox('Bitora ScreenFlow',error.message);app.quit();});

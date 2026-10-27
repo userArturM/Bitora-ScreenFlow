@@ -65,7 +65,7 @@ jobs:
           $portable = (Get-ChildItem release/*Portable*.exe | Select-Object -First 1).FullName
           Test-App $portable
           if (-not (Test-Path 'release/BitoraScreenFlow-Data/Settings')) { throw 'Portable settings folder missing' }
-          $installDir = Join-Path $env:LOCALAPPDATA 'BitoraScreenFlow-CI'
+          $installDir = Join-Path $env:LOCALAPPDATA "Bitora 'Тест' #100%"
           Write-Host "Installing to: $installDir"
           $p = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
@@ -84,6 +84,19 @@ jobs:
           if (Test-Path "$env:BITORA_TEST_OUTPUT/error.txt") { Get-Content "$env:BITORA_TEST_OUTPUT/error.txt" }
           if ($p.ExitCode -ne 0) { throw "Functional tests failed: $($p.ExitCode)" }
           Get-Content "$env:BITORA_TEST_OUTPUT/result.json"
+      - name: Functional regression in Unicode and escaped install path
+        shell: pwsh
+        run: |
+          $special = Join-Path $env:RUNNER_TEMP "Bitora 'Артур' #100%"
+          Copy-Item -LiteralPath "$pwd/release/win-unpacked" -Destination $special -Recurse
+          $env:BITORA_TEST_OUTPUT = Join-Path $env:RUNNER_TEMP 'BitoraPathRegression'
+          $p = Start-Process -FilePath (Join-Path $special 'Bitora ScreenFlow.exe') -ArgumentList '--functional-test' -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'Path regression timed out' }
+          if (Test-Path "$env:BITORA_TEST_OUTPUT/error.txt") { Get-Content "$env:BITORA_TEST_OUTPUT/error.txt" }
+          if ($p.ExitCode -ne 0) { throw "Path regression failed: $($p.ExitCode)" }
+          $result = Get-Content "$env:BITORA_TEST_OUTPUT/result.json" -Raw | ConvertFrom-Json
+          $result | ConvertTo-Json -Depth 5
+          if (-not $result.normalizedPageAccepted) { throw 'Normalized path was not accepted' }
       - name: Checksums
         shell: pwsh
         run: |
