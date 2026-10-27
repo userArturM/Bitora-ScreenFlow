@@ -47,6 +47,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Syntax error: $($_.Name)" }
           }
       - run: npm test
+      - name: Install Electron test runtime
+        run: node node_modules/electron/install.js
       - name: Test source startup from special-character path before packaging
         shell: pwsh
         run: |
