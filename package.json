@@ -1,6 +1,6 @@
 {
   "name": "bitora-screenflow",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Локальная запись экрана",
   "author": "Bitora",
   "license": "MIT",
@@ -10,6 +10,9 @@
     "test": "node --test test/*.test.js",
     "package:win": "electron-builder --win nsis portable --x64 --publish never",
     "dist:win": "electron-builder --win nsis portable --x64 --publish never"
+  },
+  "dependencies": {
+    "ffmpeg-static": "5.2.0"
   },
   "devDependencies": {
     "electron": "45.0.0",
@@ -30,6 +33,9 @@
       "main.js",
       "preload.js",
       "renderer.js",
+      "shared.js",
+      "settings-store.js",
+      "media-tools.js",
       "recording-store.js",
       "index.html",
       "style.css",
@@ -76,6 +82,9 @@
       "artifactName": "Bitora-ScreenFlow-Portable-${version}-${arch}.${ext}",
       "requestExecutionLevel": "user"
     },
-    "publish": null
+    "publish": null,
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ]
   }
 }

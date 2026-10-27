@@ -4,33 +4,56 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'none'">
 <title>Bitora ScreenFlow</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<aside><div class="brand"><span class="logo">◉</span><span>Bitora<small>ScreenFlow</small></span></div><div class="caption">ВАША СТУДИЯ ЗАПИСИ</div>
-<nav><button id="recordTab" class="nav active">◉ <span>Запись экрана</span></button><button id="libraryTab" class="nav">▤ <span>Мои записи</span><b id="count">0</b></button></nav>
-<div class="aside-bottom"><span class="local-dot"></span> Всё остаётся на вашем ПК<p>Без аккаунта. Без облака.<br>Без водяных знаков.</p><small>Bitora ScreenFlow · 1.1</small></div></aside>
+<svg class="sprite" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.5" fill="currentColor"/></symbol>
+<symbol id="i-library" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 9.2v5.6l4.6-2.8z" fill="currentColor"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-convert" viewBox="0 0 24 24"><path d="M4 9h13l-3-3M20 15H7l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-repair" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 4.9 4.9L10 20.8a2.1 2.1 0 0 1-3-3l9.4-9.4A4 4 0 0 0 14.5 6.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+</defs></svg>
+<aside><div class="brand"><svg class="ic logo" aria-hidden="true"><use href="#i-record"/></svg><span>Bitora<small>ScreenFlow</small></span></div><div class="caption">ВАША СТУДИЯ ЗАПИСИ</div>
+<nav aria-label="Разделы"><button id="recordTab" class="nav active" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-record"/></svg><span>Запись экрана</span></button><button id="libraryTab" class="nav"><svg class="ic" aria-hidden="true"><use href="#i-library"/></svg><span>Мои записи</span><b id="count">0</b></button></nav>
+<div class="aside-bottom"><span class="local-dot"></span> Всё остаётся на вашем ПК<p>Без аккаунта. Без облака.<br>Без водяных знаков.</p><small>Bitora ScreenFlow · 1.2</small></div></aside>
 <main>
-<header><div><div class="eyebrow">BITORA SCREENFLOW / СТУДИЯ</div><h1 id="pageTitle">Запишите важное.</h1><p id="pageSubtitle">Рабочие процессы, идеи и моменты — в одном видео.</p></div><span id="status" class="badge">Готов к записи</span></header>
+<header><div><div class="eyebrow">BITORA SCREENFLOW / СТУДИЯ</div><h1 id="pageTitle">Запишите важное.</h1><p id="pageSubtitle">Рабочие процессы, идеи и моменты — в одном видео.</p></div><span id="status" class="badge" role="status" aria-live="polite">Готов к записи</span></header>
 <div id="message" role="alert" hidden></div>
-<section id="recordView">
+<section id="recordView" aria-label="Запись экрана">
 <div class="workspace">
 <div class="preview-panel"><div class="panel-heading"><span>ПРЕДПРОСМОТР</span><span id="sourceLabel">Источник не выбран</span></div>
-<div class="preview"><img id="thumbnail" alt="Выбранный источник" hidden><video id="preview" autoplay muted playsinline hidden></video><div id="empty"><div class="monitor">▣</div><h2>Что будем записывать?</h2><p>Выберите экран или отдельное окно</p><button id="choose" class="secondary">Выбрать источник ↗</button></div><div id="countdown" hidden></div></div>
+<div class="preview"><img id="thumbnail" alt="Выбранный источник" hidden><video id="preview" autoplay muted playsinline hidden></video><div id="empty"><svg class="monitor" aria-hidden="true"><use href="#i-monitor"/></svg><h2>Что будем записывать?</h2><p>Выберите экран или отдельное окно</p><button id="choose" class="secondary">Выбрать источник</button></div><div id="countdown" hidden></div></div>
 <div class="preview-footer"><span id="codecLabel">WEBM · ЛОКАЛЬНАЯ ЗАПИСЬ</span><button id="change" class="text-button" disabled>Изменить источник</button></div></div>
 <div class="settings"><div class="panel-heading">НАСТРОЙКИ ЗАПИСИ</div>
-<label>Частота кадров<select id="fps"><option value="30">30 кадров/с · стандарт</option><option value="60">60 кадров/с · плавно</option><option value="15">15 кадров/с · презентации</option></select></label>
-<label>Качество<select id="quality"><option value="8000000">Высокое · 8 Мбит/с</option><option value="16000000">Максимальное · 16 Мбит/с</option><option value="4000000">Компактное · 4 Мбит/с</option></select></label>
+<label class="field">Частота кадров<select id="fps"><option value="30">30 кадров/с · стандарт</option><option value="60">60 кадров/с · плавно</option><option value="15">15 кадров/с · презентации</option></select></label>
+<label class="field">Качество<select id="quality"><option value="8000000">Высокое · 8 Мбит/с</option><option value="16000000">Максимальное · 16 Мбит/с</option><option value="4000000">Компактное · 4 Мбит/с</option></select></label>
 <div class="divider"></div>
-<label class="toggle-row"><span>Звук компьютера<small>Все системные звуки</small></span><input id="systemAudio" type="checkbox" checked></label>
-<label class="toggle-row"><span>Микрофон<small>Комментарий к записи</small></span><input id="mic" type="checkbox"></label>
-<select id="micDevice" aria-label="Микрофон" disabled><option value="">По умолчанию</option></select>
+<label class="toggle-row"><span>Звук компьютера<small>Все системные звуки</small></span><input id="systemAudio" type="checkbox" role="switch" checked></label>
+<label class="toggle-row"><span>Микрофон<small>Комментарий к записи</small></span><input id="mic" type="checkbox" role="switch"></label>
+<label class="field">Устройство записи<select id="micDevice" disabled><option value="">По умолчанию</option></select></label>
 <div class="divider"></div>
-<label class="toggle-row"><span>Отсчёт 3 секунды</span><input id="delay" type="checkbox" checked></label>
-<label class="toggle-row"><span>Свернуть при старте</span><input id="minimize" type="checkbox" checked></label>
+<label class="toggle-row"><span>Отсчёт 3 секунды</span><input id="delay" type="checkbox" role="switch" checked></label>
+<label class="toggle-row"><span>Свернуть при старте</span><input id="minimize" type="checkbox" role="switch" checked></label>
+<details class="more"><summary>Дополнительно</summary>
+<label class="toggle-row"><span>Исправлять видео после записи<small id="repairHint">Добавляет длительность и перемотку</small></span><input id="autoRepair" type="checkbox" role="switch" checked></label>
+<div class="hotkey-row"><label for="hkToggle">Старт / стоп</label><input id="hkToggle" class="hotkey" readonly aria-describedby="hkHint"></div>
+<div class="hotkey-row"><label for="hkPause">Пауза</label><input id="hkPause" class="hotkey" readonly aria-describedby="hkHint"></div>
+<small id="hkHint" class="hint">Нажмите в поле и введите сочетание с Ctrl или Alt.</small>
+</details>
 </div></div>
-<div class="transport"><div class="timer-block"><span id="recordDot"></span><div><div id="timer">00:00:00</div><small id="size">Ожидание записи</small></div></div><div class="controls"><button id="pause" class="secondary" disabled>Ⅱ Пауза</button><button id="stop" class="secondary" disabled>■ Завершить</button><button id="start" class="primary" disabled>● Начать запись</button></div></div>
-<div class="tips"><span><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> старт / стоп</span><span><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> пауза</span><span>Видео сохраняется автоматически</span></div>
+<div class="transport"><div class="timer-block"><span id="recordDot"></span><div><div id="timer" role="timer">00:00:00</div><small id="size">Ожидание записи</small></div></div>
+<div class="meter-block"><div class="meter-label"><span>Уровень звука</span><span id="meterText">—</span></div><div class="meter" aria-hidden="true"><i id="meterFill"></i></div></div>
+<div class="controls"><button id="pause" class="secondary" hidden><svg class="ic" aria-hidden="true"><use href="#i-pause"/></svg><span>Пауза</span></button><button id="stop" class="danger" hidden><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg><span>Завершить</span></button><button id="start" class="primary" disabled><svg class="ic" aria-hidden="true"><use href="#i-record"/></svg><span>Начать запись</span></button></div></div>
+<div class="tips"><span id="tipToggle"></span><span id="tipPause"></span><span id="diskInfo">Свободное место: …</span></div>
 <div class="note">Звук компьютера записывается целиком, даже при выборе отдельного окна. Для записи только голоса выключите системный звук.</div>
 </section>
-<section id="libraryView" hidden><div class="library-toolbar"><div><strong>Папка сохранения</strong><p id="folderPath"></p></div><button id="chooseFolder" class="secondary">Изменить</button><button id="openFolder" class="secondary">Открыть папку ↗</button></div><div id="recordings"></div></section>
+<section id="libraryView" aria-label="Мои записи" hidden><div class="library-toolbar"><div><strong>Папка сохранения</strong><p id="folderPath"></p><p id="libraryDisk"></p></div><button id="chooseFolder" class="secondary">Изменить</button><button id="openFolder" class="secondary"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg><span>Открыть папку</span></button></div><div id="recordings"></div></section>
 </main>
-<dialog id="picker"><div class="dialog-header"><div><h2>Выберите источник</h2><p>Экран целиком или только нужное окно</p></div><button id="closePicker" class="secondary" aria-label="Закрыть">✕</button></div><div id="sources"></div><button id="refresh" class="secondary">Обновить список</button></dialog>
-<script src="renderer.js"></script></body></html>
+<dialog id="picker" aria-labelledby="pickerTitle"><div class="dialog-header"><div><h2 id="pickerTitle">Выберите источник</h2><p>Экран целиком или только нужное окно</p></div><button id="closePicker" class="secondary icon-only" aria-label="Закрыть"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button></div><div id="sources"></div><button id="refresh" class="secondary">Обновить список</button></dialog>
+<script src="shared.js"></script><script src="renderer.js"></script></body></html>

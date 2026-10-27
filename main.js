@@ -1,8 +1,11 @@
-const {app,BrowserWindow,ipcMain,desktopCapturer,session,dialog,shell,globalShortcut,powerSaveBlocker} = require('electron');
+const {app,BrowserWindow,ipcMain,desktopCapturer,session,dialog,shell,globalShortcut,powerSaveBlocker,Tray,Menu,nativeImage} = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {pathToFileURL} = require('node:url');
 const {RecordingStore} = require('./recording-store');
+const {SettingsStore} = require('./settings-store');
+const media = require('./media-tools');
+const S = require('./shared');
 const portableRoot = process.env.PORTABLE_EXECUTABLE_DIR;
 const portableData = portableRoot ? path.join(portableRoot,'BitoraScreenFlow-Data') : null;
 if (portableData) {
@@ -18,20 +21,66 @@ if (portableData) {
 app.setAppUserModelId('com.bitora.screenflow');
 const smokeTest=process.argv.includes('--smoke-test');
 if(smokeTest) setTimeout(()=>app.exit(2),20000).unref();
-let win, store, selected, blocker, closing = false, writeChain = Promise.resolve();
+let win, store, settingsStore, config, selected, blocker, tray, closing = false, writeChain = Promise.resolve();
+let trayState = {state:'idle',elapsed:0}, trayKey = '';
+const busyFiles = new Set();
+const infoCache = new Map();
 const page = pathToFileURL(path.join(__dirname,'index.html')).href;
 function trusted(event) { if(event.sender !== win.webContents || event.senderFrame?.url !== page) throw new Error('Доступ запрещён'); }
 function handle(name,fn) { ipcMain.handle(name,async(event,...args)=>{trusted(event);return fn(...args);}); }
-function validFile(name) {
-  if(typeof name !== 'string' || path.basename(name)!==name || !name.endsWith('.webm')) throw new Error('Недопустимый файл');
-  return path.join(store.directory,name);
+function validFile(name) { return path.join(store.directory,S.validateRecordingName(name)); }
+function sendCommand(command) { if(win && !win.isDestroyed()) win.webContents.send('command',command); }
+function showWindow() { if(!win || win.isDestroyed()) return; if(win.isMinimized()) win.restore(); win.show(); win.focus(); }
+
+// --- значок в трее: состояние записи и быстрые команды ---
+function refreshTray() {
+  if(!tray) return;
+  const {state,elapsed} = trayState, active = state==='recording' || state==='paused';
+  tray.setToolTip('Bitora ScreenFlow'+(active?` — ${state==='paused'?'пауза':'запись'} ${S.formatDuration(elapsed)}`:''));
+  if(state===trayKey) return;
+  trayKey = state;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {label:'Показать окно',click:showWindow},
+    {type:'separator'},
+    {label:state==='paused'?'Продолжить запись':'Пауза',enabled:active,click:()=>sendCommand('pause')},
+    {label:'Завершить запись',enabled:active,click:()=>sendCommand('stop')},
+    {type:'separator'},
+    {label:'Выход',click:()=>win.close()}
+  ]));
 }
-async function settings() {
-  try { return JSON.parse(await fs.readFile(path.join(app.getPath('userData'),'settings.json'),'utf8')); } catch {return {};}
+
+// --- глобальные горячие клавиши ---
+function trigger(command) {
+  if(command==='toggle') win.webContents.executeJavaScript('window.dispatchEvent(new Event("screenflow-toggle"))',true).catch(()=>{});
+  else sendCommand('pause');
 }
+function registerHotkeys(keys) {
+  const failed = [];
+  for(const [command,accelerator] of Object.entries(keys)) {
+    let ok = false;
+    try { ok = globalShortcut.register(accelerator,()=>trigger(command)); } catch {}
+    if(!ok) failed.push(command);
+  }
+  return failed;
+}
+async function configView() {
+  return {hotkeys:config.hotkeys,autoRepair:config.autoRepair,folder:store.directory,ffmpeg:!!(await media.findFfmpeg())};
+}
+async function ffmpegOrThrow() {
+  const ffmpeg = await media.findFfmpeg();
+  if(!ffmpeg) throw new Error('ffmpeg не найден. В установленной версии он входит в комплект; при запуске из исходников установите ffmpeg или задайте BITORA_FFMPEG.');
+  return ffmpeg;
+}
+async function exclusive(name,job) {
+  if(busyFiles.has(name)) throw new Error('Этот файл уже обрабатывается.');
+  busyFiles.add(name);
+  try { return await job(); } finally { busyFiles.delete(name); }
+}
+
 app.whenReady().then(async()=>{
-  const saved = await settings();
-  store = new RecordingStore(saved.folder || (portableData ? path.join(portableData,'Recordings') : path.join(app.getPath('videos'),'Bitora ScreenFlow')));
+  settingsStore = new SettingsStore(app.getPath('userData'));
+  config = await settingsStore.read();
+  store = new RecordingStore(config.folder || (portableData ? path.join(portableData,'Recordings') : path.join(app.getPath('videos'),'Bitora ScreenFlow')));
   win = new BrowserWindow({width:1180,height:880,minWidth:900,minHeight:680,backgroundColor:'#10131b',title:'Bitora ScreenFlow',icon:path.join(__dirname,'assets/icon.ico'),show:!smokeTest,
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   win.setMenu(null);
@@ -51,6 +100,9 @@ app.whenReady().then(async()=>{
       callback(audio ? {video:source,audio:'loopback'} : {video:source});
     } catch {callback(null);}
   });
+  if(!smokeTest) {
+    try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname,'assets/icon.ico'))); tray.on('click',showWindow); refreshTray(); } catch { tray = null; }
+  }
   handle('sources',async()=> (await desktopCapturer.getSources({types:['screen','window'],thumbnailSize:{width:400,height:225}}))
     .filter(s=>!s.name.startsWith('Bitora ScreenFlow')).map(s=>({id:s.id,name:s.name,image:s.thumbnail.toDataURL()})));
   handle('select',async(id,audio)=>{if(typeof id!=='string') throw new Error('Выберите источник');selected={id,audio:!!audio};});
@@ -73,16 +125,38 @@ app.whenReady().then(async()=>{
       blocker=undefined;
     }
     if(error) throw new Error('Запись прервана ошибкой диска. Сохранённая часть доступна в папке.');
+    // Исправляем длительность и индекс перемотки без перекодирования; при неудаче остаётся исходный файл.
+    const ffmpeg = result && config.autoRepair ? await media.findFfmpeg() : null;
+    if(ffmpeg) {
+      const original = result;
+      try { result = await exclusive(path.basename(original),()=>media.repair(ffmpeg,original)); } catch { result = original; }
+    }
     return result;
   });
   handle('library',async()=>{
     await fs.mkdir(store.directory,{recursive:true});
-    const names = (await fs.readdir(store.directory)).filter(n=>n.endsWith('.webm'));
-    const items = await Promise.all(names.map(async name=>{
-      const stat=await fs.stat(path.join(store.directory,name));
-      return {name,size:stat.size,date:stat.mtimeMs,partial:name.endsWith('.partial.webm')};
-    }));
+    const all = await fs.readdir(store.directory);
+    if(!busyFiles.size) for(const n of all.filter(S.isTempName)) await fs.rm(path.join(store.directory,n),{force:true}).catch(()=>{});
+    const items = (await Promise.all(all.filter(S.isRecordingName).map(async name=>{
+      try {
+        const stat=await fs.stat(path.join(store.directory,name));
+        const {partial,ext}=S.splitName(name);
+        return {name,size:stat.size,date:stat.mtimeMs,partial,ext,busy:busyFiles.has(name)};
+      } catch {return null;}
+    }))).filter(Boolean);
     return {folder:store.directory,items:items.sort((a,b)=>b.date-a.date)};
+  });
+  handle('info',async name=>{
+    const file=validFile(name), ffmpeg=await media.findFfmpeg();
+    if(!ffmpeg) return {};
+    const stat=await fs.stat(file), key=`${name}|${stat.size}|${stat.mtimeMs}`;
+    if(infoCache.has(key)) return infoCache.get(key);
+    const duration=await media.probeDuration(ffmpeg,file).catch(()=>null);
+    const jpg=await media.thumbnail(ffmpeg,file,duration).catch(()=>null);
+    const info={duration,thumb:jpg?'data:image/jpeg;base64,'+jpg.toString('base64'):null};
+    if(infoCache.size>300) infoCache.clear();
+    infoCache.set(key,info);
+    return info;
   });
   handle('open',async name=>{const error=await shell.openPath(validFile(name));if(error) throw new Error(error);});
   handle('reveal',name=>shell.showItemInFolder(validFile(name)));
@@ -93,39 +167,93 @@ app.whenReady().then(async()=>{
     if(!result.canceled) {
       await fs.mkdir(result.filePaths[0],{recursive:true});
       await fs.access(result.filePaths[0],require('node:fs').constants.W_OK);
-      await fs.writeFile(path.join(app.getPath('userData'),'settings.json'),JSON.stringify({folder:result.filePaths[0]}));
+      config = await settingsStore.update({folder:result.filePaths[0]});
       store.directory=result.filePaths[0];
     }
     return store.directory;
   });
   handle('save-as',async name=>{
-    const source=validFile(name);
-    const result=await dialog.showSaveDialog(win,{defaultPath:name,filters:[{name:'WebM видео',extensions:['webm']}]});
+    const source=validFile(name), ext=S.splitName(name).ext.slice(1);
+    const result=await dialog.showSaveDialog(win,{defaultPath:name,filters:[{name:ext==='mp4'?'MP4 видео':'WebM видео',extensions:[ext]}]});
     if(!result.canceled && path.resolve(result.filePath)!==path.resolve(source)) await fs.copyFile(source,result.filePath);
+  });
+  handle('rename',async(name,newBase)=>{
+    const source=validFile(name), parts=S.splitName(name);
+    if(parts.partial) throw new Error('Незавершённую запись сначала нужно исправить.');
+    if(busyFiles.has(name)) throw new Error('Файл сейчас обрабатывается.');
+    const target=path.join(store.directory,S.sanitizeBaseName(newBase)+parts.ext);
+    if(path.resolve(target)===path.resolve(source)) return name;
+    if(await fs.access(target).then(()=>true,()=>false)) throw new Error('Файл с таким именем уже есть.');
+    await fs.rename(source,target);
+    return path.basename(target);
+  });
+  handle('remove',async name=>{
+    const file=validFile(name);
+    if(store.current?.file===file || busyFiles.has(name)) throw new Error('Файл сейчас используется.');
+    await shell.trashItem(file);
+  });
+  handle('repair',async name=>{
+    const file=validFile(name);
+    if(store.current?.file===file) throw new Error('Файл сейчас записывается.');
+    const ffmpeg=await ffmpegOrThrow();
+    return path.basename(await exclusive(name,()=>media.repair(ffmpeg,file)));
+  });
+  handle('convert',async name=>{
+    const file=validFile(name);
+    if(store.current?.file===file) throw new Error('Файл сейчас записывается.');
+    const ffmpeg=await ffmpegOrThrow();
+    return path.basename(await exclusive(name,()=>media.convertToMp4(ffmpeg,file)));
+  });
+  handle('disk',async()=>{
+    await fs.mkdir(store.directory,{recursive:true});
+    const s=await fs.statfs(store.directory);
+    return {free:Number(s.bavail)*Number(s.bsize),total:Number(s.blocks)*Number(s.bsize)};
+  });
+  handle('config',()=>configView());
+  handle('set-config',async patch=>{
+    if(!patch || typeof patch!=='object') throw new Error('Неверные настройки');
+    if(patch.hotkeys) {
+      const next=patch.hotkeys;
+      if(!S.validateAccelerator(next.toggle) || !S.validateAccelerator(next.pause) || next.toggle===next.pause) throw new Error('Выберите два разных сочетания с Ctrl или Alt, например Ctrl + Shift + R.');
+      globalShortcut.unregisterAll();
+      const failed=registerHotkeys(next);
+      if(failed.length) {
+        globalShortcut.unregisterAll();registerHotkeys(config.hotkeys);
+        throw new Error('Сочетание занято другой программой. Выберите другое.');
+      }
+      config=await settingsStore.update({hotkeys:next});
+    }
+    if(typeof patch.autoRepair==='boolean') config=await settingsStore.update({autoRepair:patch.autoRepair});
+    return configView();
+  });
+  handle('state',payload=>{
+    if(!payload || !['idle','preparing','recording','paused','saving'].includes(payload.state)) return;
+    trayState={state:payload.state,elapsed:Number(payload.elapsed)||0};
+    refreshTray();
   });
   handle('minimize',()=>win.minimize());
   win.on('close',e=>{
     if(store.current && !closing) {
       e.preventDefault();
-      win.show();
-      win.webContents.send('command','close');
+      showWindow();
+      sendCommand('close');
+      return;
+    }
+    if(busyFiles.size && !closing) {
+      const choice=dialog.showMessageBoxSync(win,{type:'question',buttons:['Подождать','Закрыть и прервать'],defaultId:0,cancelId:0,
+        title:'Bitora ScreenFlow',message:'Идёт обработка видео. Если закрыть приложение, она прервётся.'});
+      if(choice===0) e.preventDefault();
     }
   });
   // Renderer completes queued writes before allowing a normal close.
   handle('close-ready',()=>{closing=true;win.close();});
-  for(const [key,command] of [['CommandOrControl+Shift+R','toggle'],['CommandOrControl+Shift+P','pause']]) {
-    const ok=globalShortcut.register(key,()=>{
-      if(command==='toggle') {
-        win.webContents.executeJavaScript('window.dispatchEvent(new Event("screenflow-toggle"))',true).catch(()=>{});
-      } else win.webContents.send('command',command);
-    });
-    if(!ok) win.webContents.once('did-finish-load',()=>win.webContents.send('command','shortcut-unavailable'));
-  }
+  const failed=registerHotkeys(config.hotkeys);
+  if(failed.length) win.webContents.once('did-finish-load',()=>sendCommand('shortcut-unavailable'));
   await win.loadFile('index.html');
   if(smokeTest) {
-    const ok=await win.webContents.executeJavaScript('document.title === "Bitora ScreenFlow" && typeof window.desktop.begin === "function" && document.getElementById("start") !== null');
+    const ok=await win.webContents.executeJavaScript('document.title === "Bitora ScreenFlow" && typeof window.desktop.begin === "function" && typeof window.Shared === "object" && document.getElementById("start") !== null');
     app.exit(ok?0:3);
   }
 }).catch(error=>{dialog.showErrorBox('Bitora ScreenFlow',error.message);app.quit();});
 app.on('window-all-closed',()=>app.quit());
-app.on('will-quit',()=>globalShortcut.unregisterAll());
+app.on('will-quit',()=>{globalShortcut.unregisterAll();media.killAll();tray?.destroy();});
