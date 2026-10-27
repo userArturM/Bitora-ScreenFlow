@@ -38,7 +38,7 @@ let silenceSince=0,silenceWarned=false;
 setInterval(()=>{if(state!=='recording'){silenceSince=0;silenceWarned=false;return;}if($('meterText').textContent==='Тишина'){silenceSince ||= Date.now();if(Date.now()-silenceSince>10000&&!silenceWarned){silenceWarned=true;message('Более 10 секунд нет звукового сигнала. Проверьте микрофон и громкость источников.');}}else silenceSince=0;},1000);
 // Non-destructive screenshot editor; bounded undo history avoids unbounded RAM growth.
 let editHistory=[],editAnchor=null,editSnapshot=null;
-async function openEditor(url){const im=new Image();im.src=url;await im.decode();const c=$('editCanvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);editHistory=[];$('editStatus').textContent='';$('editorDialog').showModal();}
+async function openEditor(url){const im=new Image();im.crossOrigin='anonymous';im.src=url;await im.decode();const c=$('editCanvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);editHistory=[];$('editStatus').textContent='';$('editorDialog').showModal();}
 function pushUndo(){const c=$('editCanvas');editHistory.push(c.toDataURL('image/png'));if(editHistory.length>8)editHistory.shift();}
 async function canvasBytes(c){const b=await new Promise((resolve,reject)=>c.toBlob(v=>v?resolve(v):reject(new Error('Не удалось создать PNG')),'image/png'));return new Uint8Array(await b.arrayBuffer());}
 $('editShot').onclick=()=>openEditor($('shotImage').src).catch(e=>fail('',e));
