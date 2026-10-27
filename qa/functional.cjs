@@ -52,6 +52,7 @@ module.exports=async({win,store,media,nativeImage})=>{
   await wait('$("editStatus").textContent.startsWith("Сохранено:")');
   await js('$("editCopy").click()');
   await wait('$("editStatus").textContent.includes("буфер")');
+  assert.ok((await require('electron').clipboard.read()).some(item=>item.types.includes('image/png')),'PNG must be on the OS clipboard');
   await js('$("editorDialog").close();tab(true)');
   await wait('$("recordings").children.length>=4');
   // In-app streaming protocol must support video metadata and seeking.
