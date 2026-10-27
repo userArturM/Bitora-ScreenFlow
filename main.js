@@ -6,6 +6,8 @@ const {RecordingStore} = require('./recording-store');
 const {SettingsStore} = require('./settings-store');
 const media = require('./media-tools');
 const S = require('./shared');
+const {validatePng,savePng} = require('./screenshot-store');
+const functionalTest=process.argv.includes('--functional-test');
 const portableRoot = process.env.PORTABLE_EXECUTABLE_DIR;
 const portableData = portableRoot ? path.join(portableRoot,'BitoraScreenFlow-Data') : null;
 if (portableData) {
@@ -20,11 +22,13 @@ if (portableData) {
 }
 app.setAppUserModelId('com.bitora.screenflow');
 const smokeTest=process.argv.includes('--smoke-test');
-if(smokeTest) setTimeout(()=>app.exit(2),20000).unref();
+if(smokeTest || functionalTest) setTimeout(()=>app.exit(2),functionalTest?90000:20000).unref();
 let win, store, settingsStore, config, selected, blocker, tray, closing = false, writeChain = Promise.resolve();
 let trayState = {state:'idle',elapsed:0}, trayKey = '';
 const busyFiles = new Set();
 const infoCache = new Map();
+let screenshotWasVisible=false;
+const screenshotFiles=new Map();
 const page = pathToFileURL(path.join(__dirname,'index.html')).href;
 function trusted(event) { if(event.sender !== win.webContents || event.senderFrame?.url !== page) throw new Error('Доступ запрещён'); }
 function handle(name,fn) { ipcMain.handle(name,async(event,...args)=>{trusted(event);return fn(...args);}); }
@@ -80,6 +84,7 @@ async function exclusive(name,job) {
 app.whenReady().then(async()=>{
   settingsStore = new SettingsStore(app.getPath('userData'));
   config = await settingsStore.read();
+  if(functionalTest) {config.folder=process.env.BITORA_TEST_OUTPUT;config.autoRepair=false;if(!config.folder) throw new Error('BITORA_TEST_OUTPUT required');}
   store = new RecordingStore(config.folder || (portableData ? path.join(portableData,'Recordings') : path.join(app.getPath('videos'),'Bitora ScreenFlow')));
   win = new BrowserWindow({width:1180,height:880,minWidth:900,minHeight:680,backgroundColor:'#10131b',title:'Bitora ScreenFlow',icon:path.join(__dirname,'assets/icon.ico'),show:!smokeTest,
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
@@ -103,6 +108,30 @@ app.whenReady().then(async()=>{
   if(!smokeTest) {
     try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname,'assets/icon.ico'))); tray.on('click',showWindow); refreshTray(); } catch { tray = null; }
   }
+  handle('screenshot-hide',()=>{
+    screenshotWasVisible=win.isVisible()&&!win.isMinimized();
+    if(screenshotWasVisible) win.hide();
+  });
+  handle('screenshot-restore',()=>{if(screenshotWasVisible) showWindow();screenshotWasVisible=false;});
+  handle('screenshot-save',async data=>{
+    const {buffer}=validatePng(data);
+    const image=nativeImage.createFromBuffer(buffer);
+    if(image.isEmpty()) throw new Error('Не удалось прочитать изображение.');
+    const result=await savePng(path.join(store.directory,'Screenshots'),image.toPNG());
+    screenshotFiles.set(result.name,result.file);
+    if(screenshotFiles.size>100) screenshotFiles.delete(screenshotFiles.keys().next().value);
+    return result;
+  });
+  handle('screenshot-reveal',name=>{
+    const file=screenshotFiles.get(name);
+    if(!file) throw new Error('Скриншот не найден в текущем сеансе.');
+    shell.showItemInFolder(file);
+  });
+  handle('screenshots-folder',async()=>{
+    const folder=path.join(store.directory,'Screenshots');
+    await fs.mkdir(folder,{recursive:true});
+    const error=await shell.openPath(folder);if(error) throw new Error(error);
+  });
   handle('sources',async()=> (await desktopCapturer.getSources({types:['screen','window'],thumbnailSize:{width:400,height:225}}))
     .filter(s=>!s.name.startsWith('Bitora ScreenFlow')).map(s=>({id:s.id,name:s.name,image:s.thumbnail.toDataURL()})));
   handle('select',async(id,audio)=>{if(typeof id!=='string') throw new Error('Выберите источник');selected={id,audio:!!audio};});
@@ -162,7 +191,7 @@ app.whenReady().then(async()=>{
   handle('reveal',name=>shell.showItemInFolder(validFile(name)));
   handle('folder',async()=>{await fs.mkdir(store.directory,{recursive:true});const error=await shell.openPath(store.directory);if(error)throw new Error(error);});
   handle('choose-folder',async()=>{
-    if(store.current) throw new Error('Сначала завершите запись');
+    if(store.current || busyFiles.size || trayState.state!=='idle') throw new Error('Сначала завершите запись или обработку видео');
     const result=await dialog.showOpenDialog(win,{properties:['openDirectory','createDirectory']});
     if(!result.canceled) {
       await fs.mkdir(result.filePaths[0],{recursive:true});
@@ -233,7 +262,7 @@ app.whenReady().then(async()=>{
   });
   handle('minimize',()=>win.minimize());
   win.on('close',e=>{
-    if(store.current && !closing) {
+    if((store.current || trayState.state==='saving') && !closing) {
       e.preventDefault();
       showWindow();
       sendCommand('close');
@@ -250,6 +279,18 @@ app.whenReady().then(async()=>{
   const failed=registerHotkeys(config.hotkeys);
   if(failed.length) win.webContents.once('did-finish-load',()=>sendCommand('shortcut-unavailable'));
   await win.loadFile('index.html');
+  if(functionalTest) {
+    try {
+      const result=await require('./qa/functional.cjs')({win,store,media,nativeImage});
+      await fs.writeFile(path.join(process.env.BITORA_TEST_OUTPUT,'result.json'),JSON.stringify(result,null,2));
+      app.exit(0);
+    } catch(error) {
+      await fs.mkdir(process.env.BITORA_TEST_OUTPUT,{recursive:true});
+      await fs.writeFile(path.join(process.env.BITORA_TEST_OUTPUT,'error.txt'),error.stack||String(error));
+      app.exit(4);
+    }
+    return;
+  }
   if(smokeTest) {
     const ok=await win.webContents.executeJavaScript('document.title === "Bitora ScreenFlow" && typeof window.desktop.begin === "function" && typeof window.Shared === "object" && document.getElementById("start") !== null');
     app.exit(ok?0:3);

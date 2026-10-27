@@ -6,6 +6,7 @@ const LOW_DISK_STOP = 300 * 1024 ** 2, LOW_DISK_WARN = 2 * 1024 ** 3;
 let source, recorder, capture, microphone, audioContext, analyser, meterTimer, cfg = {hotkeys: {}, ffmpeg: false, autoRepair: true};
 let state='idle', queue=Promise.resolve(), writeError=null, elapsed=0, lastTick=0, byteCount=0, pendingBytes=0, closeAfter=false;
 let capturingHotkey=false, lowDiskWarned=false, reportedSecond=-1, libraryToken=0;
+let takingShot=false,lastScreenshot=null;
 let settings={};
 try {settings=JSON.parse(localStorage.getItem('screenflow-settings')||'{}');} catch {}
 const settingsIds=['fps','quality','systemAudio','mic','delay','minimize'];
@@ -36,7 +37,7 @@ function fail(prefix,error) {const h=humanizeError(error);message((prefix?prefix
 
 function reportState() {api.state({state,elapsed:Math.floor(elapsed/1000)}).catch(()=>{});}
 function updateUI() {
-  const idle=state==='idle', active=['recording','paused'].includes(state);
+  const idle=state==='idle'&&!takingShot, active=['recording','paused'].includes(state);
   $('start').hidden=active;$('start').disabled=!idle||!source;
   $('start').lastElementChild.textContent={preparing:'Подготовка…',saving:'Сохранение…'}[state]||'Начать запись';
   $('pause').hidden=$('stop').hidden=!active;
@@ -47,6 +48,7 @@ function updateUI() {
   $('micDevice').disabled=!idle||!$('mic').checked;
   $('autoRepair').disabled=!idle||!cfg.ffmpeg;
   $('chooseFolder').disabled=!idle;
+  $('screenshot').disabled=takingShot||!source||['preparing','saving'].includes(state);
   $('status').textContent={idle:'Готов к записи',preparing:'Подготовка…',recording:'● Идёт запись',paused:'Ⅱ На паузе',saving:'Сохранение…'}[state];
   $('status').classList.toggle('live',active);
   $('recordDot').classList.toggle('live',state==='recording');
@@ -130,7 +132,7 @@ async function cleanup() {
   $('preview').srcObject=null;$('preview').hidden=true;$('thumbnail').hidden=!source;$('countdown').hidden=true;
 }
 async function start() {
-  if(state!=='idle') return;
+  if(state!=='idle'||takingShot) return;
   if(!source) {await showSources();return;}
   state='preparing';updateUI();$('message').hidden=true;lowDiskWarned=false;
   let opened=false;
@@ -212,6 +214,42 @@ async function finish() {
   finally {
     await cleanup();recorder=null;state='idle';updateUI();await loadLibrary();refreshDisk();
     if(closeAfter) {closeAfter=false;await api.closeReady();}
+  }
+}
+
+// --- PNG полного разрешения выбранного экрана/окна ---
+async function takeScreenshot() {
+  if(takingShot || !source || ['preparing','saving'].includes(state)) return;
+  takingShot=true;updateUI();
+  let stream,video,hidden=false;
+  try {
+    if(capture?.getVideoTracks().some(t=>t.readyState==='live')) video=$('preview');
+    else {
+      await api.select(source.id,false);
+      stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
+      video=document.createElement('video');video.muted=true;video.srcObject=stream;
+      await video.play();
+    }
+    if($('minimize').checked) {await api.screenshotHide();hidden=true;await new Promise(r=>setTimeout(r,350));}
+    await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{video.cancelVideoFrameCallback(callback);reject(new Error('Нет изображения от выбранного источника.'));},8000);
+      const callback=video.requestVideoFrameCallback(()=>{clearTimeout(timer);resolve();});
+    });
+    if(!video.videoWidth||!video.videoHeight) throw new Error('Источник не передаёт изображение.');
+    const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+    canvas.getContext('2d').drawImage(video,0,0);
+    const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Не удалось создать PNG.')),'image/png'));
+    lastScreenshot=await api.screenshotSave(new Uint8Array(await blob.arrayBuffer()));
+    $('shotImage').src=canvas.toDataURL('image/png');
+    $('shotPath').textContent=lastScreenshot.file+' · '+lastScreenshot.width+' × '+lastScreenshot.height;
+    $('shotPreview').showModal();
+    message('Скриншот сохранён в PNG, в папку Screenshots.');
+  } catch(e) {fail('Не удалось сделать скриншот.',e);}
+  finally {
+    stream?.getTracks().forEach(t=>t.stop());
+    if(video && video!==$('preview')) video.srcObject=null;
+    if(hidden) await api.screenshotRestore().catch(()=>{});
+    takingShot=false;updateUI();
   }
 }
 
@@ -335,6 +373,11 @@ $('autoRepair').addEventListener('change',async()=>{
   renderConfig();
 });
 
+$('screenshot').onclick=takeScreenshot;
+$('closeShot').onclick=()=>$('shotPreview').close();
+$('shotPreview').addEventListener('close',()=>{$('shotImage').removeAttribute('src');});
+$('revealShot').onclick=()=>{if(lastScreenshot)api.screenshotReveal(lastScreenshot.name).catch(e=>fail('',e));};
+$('shotsFolder').onclick=()=>api.screenshotsFolder().catch(e=>fail('',e));
 $('choose').onclick=showSources;$('change').onclick=showSources;$('refresh').onclick=refreshSources;
 $('closePicker').onclick=()=>$('picker').close();
 $('start').onclick=start;$('stop').onclick=stop;$('pause').onclick=pause;
