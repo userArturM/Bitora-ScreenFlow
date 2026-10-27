@@ -280,7 +280,7 @@ app.whenReady().then(async()=>{
   handle('close-ready',()=>{closing=true;win.close();});
   const failed=registerHotkeys(config.hotkeys);
   if(failed.length) win.webContents.once('did-finish-load',()=>sendCommand('shortcut-unavailable'));
-  await win.loadFile('index.html');
+  await win.loadURL(page);
   if(functionalTest) {
     try {
       const result=await require('./qa/functional.cjs')({win,store,media,nativeImage});
@@ -296,16 +296,20 @@ app.whenReady().then(async()=>{
     return;
   }
   if(smokeTest) {
-    const ok=await win.webContents.executeJavaScript(`(async()=>{
-      if(document.title!=="Bitora ScreenFlow"||typeof window.desktop.begin!=="function"||!window.Shared||!document.getElementById("start"))return false;
+    const report=await win.webContents.executeJavaScript(`(async()=>{
+      const result={title:document.title,api:typeof window.desktop,shared:typeof window.Shared};
       try {
-        const cfg=await window.desktop.config();
-        const library=await window.desktop.library();
-        const sources=await window.desktop.sources();
-        return !!cfg.hotkeys && typeof library.folder==="string" && Array.isArray(sources) && sources.length>0;
-      }catch{return false;}
+        const cfg=await window.desktop.config();result.config=!!cfg.hotkeys;
+        const library=await window.desktop.library();result.library=typeof library.folder==="string";
+        const sources=await window.desktop.sources();result.sources=Array.isArray(sources)&&sources.length>0;
+        result.ok=result.title==="Bitora ScreenFlow"&&result.config&&result.library&&result.sources&&!!document.getElementById("start");
+      }catch(error){result.ok=false;result.error=String(error);}
+      return result;
     })()`);
-    app.exit(ok?0:3);
+    report.pageURL=win.webContents.mainFrame.url;report.expectedURL=page;
+    report.normalizedPageAccepted=isAppPageURL(report.pageURL,appPage);
+    if(process.env.BITORA_DIAGNOSTIC_REPORT)await fs.writeFile(process.env.BITORA_DIAGNOSTIC_REPORT,JSON.stringify(report,null,2));
+    app.exit(report.ok?0:3);
   }
 }).catch(error=>{dialog.showErrorBox('Bitora ScreenFlow',error.message);app.quit();});
 app.on('window-all-closed',()=>app.quit());

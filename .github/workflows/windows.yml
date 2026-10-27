@@ -47,6 +47,19 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Syntax error: $($_.Name)" }
           }
       - run: npm test
+      - name: Test source startup from special-character path before packaging
+        shell: pwsh
+        run: |
+          $probe = Join-Path $env:RUNNER_TEMP "Bitora 'Проверка' #100%"
+          New-Item -ItemType Directory -Path $probe | Out-Null
+          Get-ChildItem -Force | Where-Object { $_.Name -notin @('node_modules','.git','release') } | Copy-Item -Destination $probe -Recurse
+          $env:BITORA_DIAGNOSTIC_REPORT = Join-Path $env:RUNNER_TEMP 'bitora-source-path-check.json'
+          $electron = Join-Path $pwd 'node_modules/electron/dist/electron.exe'
+          $argsLine = '"' + $probe + '" --smoke-test'
+          $p = Start-Process -FilePath $electron -ArgumentList $argsLine -PassThru
+          if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'Special path source test timed out' }
+          if (Test-Path $env:BITORA_DIAGNOSTIC_REPORT) { Get-Content $env:BITORA_DIAGNOSTIC_REPORT }
+          if ($p.ExitCode -ne 0) { throw "Special path source test failed: $($p.ExitCode)" }
       - name: Build Windows packages
         run: npm run dist:win
         env:
@@ -56,8 +69,11 @@ jobs:
         run: |
           function Test-App($exe) {
             Write-Host "Testing startup: $exe"
+            $env:BITORA_DIAGNOSTIC_REPORT = Join-Path $env:RUNNER_TEMP 'bitora-startup-check.json'
+            Remove-Item $env:BITORA_DIAGNOSTIC_REPORT -ErrorAction SilentlyContinue
             $p = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
             if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "Startup timed out: $exe" }
+            if (Test-Path $env:BITORA_DIAGNOSTIC_REPORT) { Get-Content $env:BITORA_DIAGNOSTIC_REPORT }
             if ($p.ExitCode -ne 0) { throw "Startup failed ($($p.ExitCode)): $exe" }
           }
           Test-App "$pwd/release/win-unpacked/Bitora ScreenFlow.exe"
