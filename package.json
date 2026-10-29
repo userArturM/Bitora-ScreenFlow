@@ -1,6 +1,6 @@
 {
   "name": "bitora-screenflow",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Локальная запись экрана",
   "author": "Bitora",
   "license": "MIT",
@@ -21,7 +21,7 @@
   "productName": "Bitora ScreenFlow",
   "repository": {
     "type": "git",
-    "url": "https://github.com/userArturM/bitora.git"
+    "url": "https://github.com/userArturM/Bitora-ScreenFlow.git"
   },
   "build": {
     "appId": "com.bitora.screenflow",
@@ -72,7 +72,7 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "signExecutable": false
+      "signExecutable": true
     },
     "nsis": {
       "oneClick": false,
