@@ -71,7 +71,7 @@ async function refreshDisk() {
     const text='Свободно: '+formatBytes(d.free)+' · хватит на '+formatEstimate(estimateSeconds(d.free,Number($('quality').value),withAudio));
     $('diskInfo').textContent=text;$('libraryDisk').textContent=text;
     if(['recording','paused'].includes(state)) {
-      if(d.free<LOW_DISK_STOP) {message('На диске почти не осталось места. Запись остановлена и сохранена.',true);stop();}
+      if(d.free<LOW_DISK_STOP) {message('На диске почти не осталось места. Запись останавливается. Сохраняем полученные данные…',true);stop();}
       else if(d.free<LOW_DISK_WARN && !lowDiskWarned) {lowDiskWarned=true;message('Мало места на диске: осталось '+formatBytes(d.free)+'. Освободите место или завершите запись.');}
     }
   } catch {$('diskInfo').textContent='';}
@@ -146,6 +146,7 @@ async function start() {
       deviceId:$('micDevice').value?{exact:$('micDevice').value}:undefined,echoCancellation:true,noiseSuppression:true
     }});
     const audioTracks=[...capture.getAudioTracks(),...(microphone?.getAudioTracks()||[])];
+    for(const track of audioTracks)track.addEventListener('ended',()=>{if(['recording','paused'].includes(state)){message('Аудиоустройство отключено. Запись останавливается; подключите устройство и выберите его заново.',true);stop();}});
     const output=new MediaStream(await window.studioVideoTracks(capture));
     if(audioTracks.length) {
       audioContext=new AudioContext();await audioContext.resume();
@@ -207,7 +208,7 @@ async function finish() {
   state='saving';updateUI();
   try {
     await queue;
-    const file=await api.finish();
+    const file=await api.finish(!!writeError);
     if(writeError) fail('Запись завершена с ошибкой. Проверьте сохранённый файл в «Мои записи».',writeError);
     else message(file?'Видео сохранено. Откройте «Мои записи», чтобы посмотреть его или сохранить копию.':'Запись не содержала видеоданных.');
   } catch(e) {fail('',e);}
@@ -398,3 +399,5 @@ api.onCommand(command=>{
   if(command==='shortcut-unavailable') message('Горячие клавиши заняты другой программой. Измените их в «Дополнительно» или используйте кнопки записи.');
 });
 updateUI();loadConfig().then(loadLibrary);refreshDisk();
+
+navigator.mediaDevices.addEventListener('devicechange',()=>{if(state==='idle')microphoneDevices().catch(e=>fail('Не удалось обновить список микрофонов.',e));else message('Список аудиоустройств изменился. Текущий источник сохраняется до конца записи; новое устройство можно выбрать перед следующей записью.');});

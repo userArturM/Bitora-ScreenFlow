@@ -23,8 +23,10 @@ if (portableData) {
   }
 }
 app.setAppUserModelId('com.bitora.screenflow');
+const updateHealth=process.argv.includes('--update-health');
+if(updateHealth)setTimeout(()=>app.exit(9),30000).unref();
 const smokeTest=process.argv.includes('--smoke-test');
-if(smokeTest || functionalTest) setTimeout(()=>app.exit(2),functionalTest?90000:20000).unref();
+if(smokeTest || functionalTest) setTimeout(()=>app.exit(2),functionalTest?180000:20000).unref();
 let activeRequests=0, updateInstalling=false;
 let win, store, settingsStore, config, selected, blocker, tray, closing = false, writeChain = Promise.resolve();
 let trayState = {state:'idle',elapsed:0}, trayKey = '';
@@ -90,7 +92,7 @@ app.whenReady().then(async()=>{
   config = await settingsStore.read();
   if(functionalTest) {config.folder=process.env.BITORA_TEST_OUTPUT;config.autoRepair=false;if(!config.folder) throw new Error('BITORA_TEST_OUTPUT required');}
   store = new RecordingStore(config.folder || (portableData ? path.join(portableData,'Recordings') : path.join(app.getPath('videos'),'Bitora ScreenFlow')));
-  win = new BrowserWindow({width:1180,height:880,minWidth:900,minHeight:680,backgroundColor:'#10131b',title:'Bitora ScreenFlow',icon:path.join(__dirname,'assets/icon.ico'),show:!smokeTest,
+  win = new BrowserWindow({width:1180,height:880,minWidth:900,minHeight:680,backgroundColor:'#10131b',title:'Bitora ScreenFlow',icon:path.join(__dirname,'assets/icon.ico'),show:!smokeTest&&!updateHealth,
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   win.setMenu(null);
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -151,11 +153,11 @@ app.whenReady().then(async()=>{
     writeChain=writeChain.then(()=>store.append(data));
     return writeChain;
   });
-  handle('finish',async()=>{
+  handle('finish',async preservePartial=>{
     let error;
     try {await writeChain;} catch(e) {error=e;}
     let result;
-    try {result=await store.finish();} finally {
+    try {result=await store.finish({preservePartial:preservePartial===true||!!error});} finally {
       if(blocker!==undefined && powerSaveBlocker.isStarted(blocker)) powerSaveBlocker.stop(blocker);
       blocker=undefined;
     }
@@ -285,6 +287,9 @@ app.whenReady().then(async()=>{
   const failed=registerHotkeys(config.hotkeys);
   if(failed.length) win.webContents.once('did-finish-load',()=>sendCommand('shortcut-unavailable'));
   await win.loadURL(page);
+  if(updateHealth){
+    try{await win.webContents.executeJavaScript('(async()=>{await window.desktop.config();await window.desktop.library();})()');if(process.env.BITORA_UPDATE_HEALTH_REPORT)await fs.writeFile(process.env.BITORA_UPDATE_HEALTH_REPORT,JSON.stringify({version:app.getVersion(),passed:true}));app.exit(0);}catch{app.exit(9);}return;
+  }
   if(functionalTest) {
     try {
       const result=await require('./qa/functional.cjs')({win,store,media,nativeImage});

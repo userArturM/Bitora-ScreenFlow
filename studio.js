@@ -55,9 +55,9 @@ $('editCopy').onclick=async()=>{try{await api.clipboardPng(await canvasBytes($('
 // Unified library, playback and precise MP4 export of a selected range.
 let playerItem=null,trimBusy=false;
 async function openPlayer(item){playerItem=item;$('playerTitle').textContent=item.name;$('trimStatus').textContent='Исходное видео останется без изменений.';$('trimSave').disabled=trimBusy||!cfg.ffmpeg;$('playerVideo').src=await api.mediaUrl('video',item.name);$('trimStart').value=0;$('trimEnd').value='';$('playerDialog').showModal();}
-$('playerVideo').onloadedmetadata=()=>{const d=$('playerVideo').duration;if(Number.isFinite(d))$('trimEnd').value=d.toFixed(2);};
-$('trimMarkStart').onclick=()=>$('trimStart').value=$('playerVideo').currentTime.toFixed(2);
-$('trimMarkEnd').onclick=()=>$('trimEnd').value=$('playerVideo').currentTime.toFixed(2);
+$('playerVideo').onloadedmetadata=()=>{const d=$('playerVideo').duration;if(Number.isFinite(d)){$('trimEnd').value=d.toFixed(2);syncTrimTimeline();}$('playerVideo').playbackRate=Number($('playerSpeed').value);};
+$('trimMarkStart').onclick=()=>{$('trimStart').value=$('playerVideo').currentTime.toFixed(2);syncTrimTimeline();};
+$('trimMarkEnd').onclick=()=>{$('trimEnd').value=$('playerVideo').currentTime.toFixed(2);syncTrimTimeline();};
 $('playerClose').onclick=()=>$('playerDialog').close();$('playerDialog').addEventListener('close',()=>{$('playerVideo').pause();$('playerVideo').removeAttribute('src');$('playerVideo').load();});
 $('trimSave').onclick=async()=>{if(trimBusy)return;trimBusy=true;$('trimSave').disabled=true;$('trimStatus').textContent='Сохранение фрагмента… Не закрывайте программу.';try{const name=await api.trimVideo(playerItem.name,Number($('trimStart').value),Number($('trimEnd').value));$('trimStatus').textContent='Сохранено: '+name;await loadLibrary();}catch(e){$('trimStatus').textContent=humanizeError(e).text;fail('Обрезка не выполнена.',e);}finally{trimBusy=false;$('trimSave').disabled=false;}};
 const originalBuildRow=buildRow;
@@ -67,9 +67,9 @@ let searchTimer;$('librarySearch').oninput=()=>{clearTimeout(searchTimer);search
 $('diagnostic').onclick=()=>api.diagnosticSave().then(saved=>{if(saved)message('Отчёт сохранён. Вы можете отправить его для разбора ошибки.');}).catch(e=>fail('',e));
 let updatePoll;
 function showUpdate(r){
-  const labels={idle:'Проверьте обновления',available:'Обновление доступно',current:'Новых совместимых обновлений нет',downloading:'Скачивание: '+((r.received||0)/1048576).toFixed(1)+' МБ',ready:'SHA-256 проверен. Можно установить.',queued:'Установка начнётся после завершения операций.',installing:'Запуск установки…',error:r.error};
+  const labels={checking:'Проверяем обновления…',idle:'Проверьте обновления',available:'Обновление доступно',current:'Новых совместимых обновлений нет',downloading:'Скачивание: '+((r.received||0)/1048576).toFixed(1)+' МБ',ready:'SHA-256 проверен. Можно установить.',queued:'Установка начнётся после завершения операций.',installing:'Запуск установки…',error:r.error};
   $('updateNotes').textContent=[labels[r.phase],r.version?'Версия: '+r.version:'',r.notes||'',r.error||''].filter(Boolean).join('\n\n');
-  $('updateDownload').disabled=r.phase!=='available';$('updateInstall').disabled=r.phase!=='ready';
+  $('updateDownload').textContent=r.received?'Продолжить скачивание':'Скачать обновление';$('updateCancel').disabled=!['downloading','queued'].includes(r.phase);$('updateDownload').disabled=r.phase!=='available';$('updateInstall').disabled=r.phase!=='ready';
 }
 $('updates').onclick=async()=>{$('updatesDialog').showModal();$('updateDownload').disabled=true;$('updateInstall').disabled=true;try{showUpdate(await api.updatesCheck());}catch(e){$('updateNotes').textContent=e.message;}clearInterval(updatePoll);updatePoll=setInterval(()=>api.updatesStatus().then(showUpdate).catch(()=>{}),1000);};
 $('updateDownload').onclick=async()=>{try{$('updateDownload').disabled=true;showUpdate(await api.updatesDownload());}catch(e){$('updateNotes').textContent=e.message;}};
@@ -78,3 +78,44 @@ $('updateGithub').onclick=()=>api.updatesOpen().catch(e=>fail('',e));
 $('updateClose').onclick=()=>$('updatesDialog').close();
 $('updatesDialog').addEventListener('close',()=>clearInterval(updatePoll));
 window.addEventListener('error',e=>api.diagnosticLog('renderer',e.message).catch(()=>{}));window.addEventListener('unhandledrejection',e=>api.diagnosticLog('promise',String(e.reason)).catch(()=>{}));
+
+$('updateCancel').onclick=()=>api.updatesCancel().then(showUpdate).catch(e=>fail('',e));
+api.updatesResult().then(r=>{if(r&&r.status!=='success')message('Последнее обновление: '+(r.status==='rolled-back'?'восстановлена предыдущая версия. ':'установка не завершена. ')+r.message,true);}).catch(()=>{});
+
+async function offerRecovery(){
+  const {items}=await api.library();const unfinished=items.filter(i=>i.partial);
+  if(!unfinished.length)return;
+  $('recoveryList').replaceChildren();
+  for(const item of unfinished){
+    const row=document.createElement('p'),name=document.createElement('span'),button=document.createElement('button');
+    name.textContent=item.name+' · '+formatBytes(item.size)+' ';button.textContent='Восстановить';button.className='secondary';
+    button.onclick=async()=>{button.disabled=true;$('recoveryStatus').textContent='Восстанавливаем запись…';try{const restored=await api.repair(item.name);button.textContent='Восстановлено';$('recoveryStatus').textContent='Сохранено: '+restored;await loadLibrary();}catch(e){button.disabled=false;$('recoveryStatus').textContent='Не удалось восстановить. Исходный файл сохранён. '+e.message;}};
+    row.append(name,button);$('recoveryList').append(row);
+  }
+  $('recoveryDialog').showModal();
+}
+$('recoveryClose').onclick=()=>$('recoveryDialog').close();
+offerRecovery().catch(e=>api.diagnosticLog('recovery',String(e)).catch(()=>{}));
+
+function syncTrimTimeline(){
+  const duration=$('playerVideo').duration;if(!Number.isFinite(duration)||duration<=0)return;
+  for(const [range,field] of [['trimRangeStart','trimStart'],['trimRangeEnd','trimEnd']]){$(range).max=duration;$(range).value=Math.max(0,Math.min(duration,Number($(field).value)||0));}
+  const start=Number($('trimStart').value),end=Number($('trimEnd').value);
+  $('trimSelection').textContent=end>start?`Выбрано: ${start.toFixed(2)}–${end.toFixed(2)} с · ${(end-start).toFixed(2)} с`:'Конец должен быть позже начала';
+}
+for(const [range,field,other,isStart] of [['trimRangeStart','trimStart','trimEnd',true],['trimRangeEnd','trimEnd','trimStart',false]]){
+  $(range).oninput=()=>{const value=Number($(range).value),edge=Number($(other).value);$(field).value=(isStart?Math.max(0,Math.min(value,edge-0.01)):Math.min($('playerVideo').duration,Math.max(value,edge+0.01))).toFixed(2);$('playerVideo').currentTime=Number($(field).value);syncTrimTimeline();};
+  $(field).addEventListener('input',syncTrimTimeline);
+}
+function togglePlayback(){const video=$('playerVideo');if(video.paused)video.play().catch(e=>fail('Не удалось воспроизвести.',e));else video.pause();}
+async function toggleFullscreen(){if(document.fullscreenElement)await document.exitFullscreen();else await $('playerVideo').requestFullscreen();}
+$('playerToggle').onclick=togglePlayback;
+$('playerFullscreen').onclick=()=>toggleFullscreen().catch(e=>fail('Полный экран недоступен.',e));
+$('playerSpeed').onchange=()=>{$('playerVideo').playbackRate=Number($('playerSpeed').value);};
+document.addEventListener('keydown',e=>{
+  if(!$('playerDialog').open||e.ctrlKey||e.altKey||e.metaKey||e.target.closest?.('input,select,textarea,button,[contenteditable]'))return;
+  const video=$('playerVideo');
+  if(e.code==='Space'){e.preventDefault();togglePlayback();}
+  if(['ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();if(Number.isFinite(video.duration))video.currentTime=Math.max(0,Math.min(video.duration,video.currentTime+(e.code==='ArrowLeft'?-1:1)*(e.shiftKey?30:5)));}
+  if(e.code==='KeyF'){e.preventDefault();toggleFullscreen().catch(e=>fail('',e));}
+});

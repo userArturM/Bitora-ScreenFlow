@@ -22,21 +22,45 @@ class Updater{
     return this.state={phase:available?'available':'current',current:this.current,version:d.tag_name,notes:String(d.body||'').slice(0,20000),available};
     }catch(e){this.state={...this.state,phase:'error',error:e.message};throw e;}
   }
+  cancel(){this.controller?.abort();}
   async download(){
     if(!this.release||this.state.phase!=='available')throw new Error('Сначала проверьте обновления');
-    const release=this.release;this.state={...this.state,phase:'downloading',received:0};
-    const file=path.join(this.directory,release.name),tmp=file+'.part';
+    const release=this.release;this.controller=new AbortController();
+    const signal=AbortSignal.any([this.controller.signal,AbortSignal.timeout(30*60*1000)]);
+    this.state={...this.state,phase:'downloading',received:0,total:release.size,error:null};
+    const file=path.join(this.directory,release.name),tmp=file+'.part',meta=tmp+'.json';
+    let invalid=false;
     try{
       await fs.mkdir(this.directory,{recursive:true});
-      const sums=await this.fetch(release.sum,{signal:AbortSignal.timeout(30000)});if(!sums.ok)throw new Error('Не удалось скачать SHA256SUMS.txt');
+      const sums=await this.fetch(release.sum,{signal});if(!sums.ok)throw new Error('Не удалось скачать SHA256SUMS.txt');
       const expected=checksum(await sums.text(),release.name);
-      const r=await this.fetch(release.url,{signal:AbortSignal.timeout(30*60*1000)});if(!r.ok||!r.body)throw new Error('Не удалось скачать обновление');
-      const handle=await fs.open(tmp,'w');
-      try{for await(const chunk of r.body){await handle.writeFile(chunk);this.state.received+=chunk.length;if(this.state.received>release.size)throw new Error('Неверный размер обновления');}}finally{await handle.close();}
-      if(this.state.received!==release.size||await hashFile(tmp)!==expected)throw new Error('Проверка SHA-256 не пройдена. Установка отменена.');
-      await fs.rename(tmp,file);this.ready={file,expected};this.state={...this.state,phase:'ready'};return this.state;
-    }catch(e){await fs.rm(tmp,{force:true}).catch(()=>{});this.state={...this.state,phase:'available',error:e.message};throw e;}
+      const identity=JSON.stringify({url:release.url,size:release.size,expected});
+      let offset=0;
+      if(await fs.readFile(meta,'utf8').catch(()=>null)===identity)offset=await fs.stat(tmp).then(s=>s.size,()=>0);
+      if(offset>release.size)offset=0;
+      if(!offset)await fs.writeFile(tmp,Buffer.alloc(0));
+      await fs.writeFile(meta,identity);
+      if(offset<release.size){
+        let r=await this.fetch(release.url,{signal,headers:offset?{Range:`bytes=${offset}-`}:{}});
+        if(offset&&r.status===200){offset=0;await fs.writeFile(tmp,Buffer.alloc(0));}
+        if(!r.ok||!r.body)throw new Error('Не удалось скачать обновление');
+        if(r.status===206&&r.headers.get('content-range')!==`bytes ${offset}-${release.size-1}/${release.size}`){invalid=true;throw new Error('Сервер вернул неверный диапазон обновления');}
+        if(r.status!==200&&r.status!==206)throw new Error('Неожиданный ответ сервера');
+        this.state.received=offset;
+        const handle=await fs.open(tmp,'a');
+        try{for await(const chunk of r.body){signal.throwIfAborted();await handle.writeFile(chunk);this.state.received+=chunk.length;if(this.state.received>release.size){invalid=true;throw new Error('Неверный размер обновления');}}await handle.sync();}finally{await handle.close();}
+      }
+      signal.throwIfAborted();
+      if((await fs.stat(tmp)).size!==release.size)throw new Error('Загрузка прервалась. Нажмите «Продолжить скачивание».');
+      if(await hashFile(tmp)!==expected){invalid=true;throw new Error('Проверка SHA-256 не пройдена. Установка отменена.');}
+      await fs.rename(tmp,file);await fs.rm(meta,{force:true});this.ready={file,expected};this.state={...this.state,phase:'ready',received:release.size};return this.state;
+    }catch(e){
+      if(invalid){await fs.rm(tmp,{force:true}).catch(()=>{});await fs.rm(meta,{force:true}).catch(()=>{});}
+      const cancelled=this.controller.signal.aborted;
+      this.state={...this.state,phase:'available',error:cancelled?'Скачивание отменено. Сохранённую часть можно загрузить позже.':e.message};
+      if(cancelled)return this.state;throw e;
+    }finally{this.controller=null;}
   }
-  async verify(){if(!this.ready||await hashFile(this.ready.file)!==this.ready.expected)throw new Error('Файл обновления изменён. Скачайте его заново.');return this.ready.file;}
+  async verify(){if(!this.ready||await hashFile(this.ready.file).catch(()=>null)!==this.ready.expected){this.ready=null;this.state.phase='available';throw new Error('Файл обновления изменён. Скачайте его заново.');}return this.ready.file;}
 }
 module.exports={Updater,newer,checksum,assetURL,hashFile};

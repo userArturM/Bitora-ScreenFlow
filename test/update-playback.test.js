@@ -22,3 +22,15 @@ test('installation waits for operations, locks new requests, and quits only afte
  context.module.exports({win:{on(){}},handle:(name,fn)=>handlers[name]=fn,isBusy:()=>busy,lock:()=>locked=true,unlock:()=>locked=false,quit:()=>quit=true});
  assert.equal(handlers['updates-install']().phase,'queued');await tick();assert.equal(launched,false);assert.equal(locked,false);busy=false;await tick();assert.equal(launched,true);assert.equal(quit,true);
 });
+test('cancelled downloads resume across updater instances and validate the complete file',async t=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'resume-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));
+ const bytes=Buffer.from('abcdefghij'),hash=createHash('sha256').update(bytes).digest('hex'),name='Bitora-ScreenFlow-Setup-1.6.0-x64.exe',base='https://github.com/userArturM/Bitora-ScreenFlow/releases/download/v1.6.0/';
+ let updater,first=true,range;
+ const fetch=async(url,options)=>url.includes('api.github.com')?Response.json({tag_name:'v1.6.0',assets:[{name,size:10,browser_download_url:base+name},{name:'SHA256SUMS.txt',browser_download_url:base+'SHA256SUMS.txt'}]}):url.endsWith('.txt')?new Response(hash+'  '+name):first?(first=false,{ok:true,status:200,body:(async function*(){yield bytes.subarray(0,4);updater.cancel();yield bytes.subarray(4);})()}):(range=options.headers.Range,new Response(bytes.subarray(4),{status:206,headers:{'content-range':'bytes 4-9/10'}}));
+ updater=new Updater({fetch,current:'1.5.1',directory:dir});await updater.check();assert.equal((await updater.download()).phase,'available');assert.equal((await fs.stat(path.join(dir,name+'.part'))).size,4);
+ updater=new Updater({fetch,current:'1.5.1',directory:dir});await updater.check();await updater.download();assert.equal(range,'bytes=4-');assert.equal(await require('../updater').hashFile(await updater.verify()),hash);
+});
+test('installer scripts stage portable updates atomically and retain rollback/error reporting',()=>{
+ const {installScript}=require('../update-install');const script=installScript("C:\\Артур's\\new.exe",'a'.repeat(64),'C:\\portable.exe',{parentPid:123,restart:false});
+ assert.match(script,/File\]::Replace\(\$stage, \$target, \$backup/);assert.match(script,/rolled-back/);assert.match(script,/--update-health/);assert.match(script,/Артур''s/);assert.match(script,/Wait-Process -Id 123/);
+});
