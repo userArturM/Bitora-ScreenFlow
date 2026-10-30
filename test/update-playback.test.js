@@ -14,3 +14,11 @@ for(const corrupt of [false,true])test('download verifies SHA-256 '+(corrupt?'an
  const u=new Updater({fetch,current:'1.5.1',directory:dir});assert.equal((await u.check()).phase,'available');
  if(corrupt){await assert.rejects(u.download(),/SHA-256/);assert.equal(u.ready,null);assert.deepEqual(await fs.readdir(dir),[]);}else{assert.equal((await u.download()).phase,'ready');const file=await u.verify();assert.equal((await u.check()).phase,'ready');await fs.writeFile(file,'changed');await assert.rejects(u.verify(),/изменён/);}
 });
+test('installation waits for operations, locks new requests, and quits only after verified launch',async()=>{
+ const vm=require('node:vm');const handlers={};let tick,busy=true,locked=false,quit=false,launched=false;
+ class FakeUpdater{constructor(){this.state={phase:'ready'};this.ready={expected:'hash'};}async verify(){assert.equal(locked,true);return 'verified.exe';}}
+ const context={module:{exports:{}},process:{env:{}},setInterval:fn=>{tick=fn;return {unref(){}};},clearInterval(){},require:name=>name==='electron'?{app:{getVersion:()=> '1.0.0',getPath:()=>'/tmp'},net:{},shell:{}}:name==='./updater'?{Updater:FakeUpdater}:name==='./update-install'?{launchUpdate:async()=>{launched=true;}}:require(name)};
+ vm.runInNewContext(await fs.readFile(path.join(__dirname,'../updater-main.js'),'utf8'),context);
+ context.module.exports({win:{on(){}},handle:(name,fn)=>handlers[name]=fn,isBusy:()=>busy,lock:()=>locked=true,unlock:()=>locked=false,quit:()=>quit=true});
+ assert.equal(handlers['updates-install']().phase,'queued');await tick();assert.equal(launched,false);assert.equal(locked,false);busy=false;await tick();assert.equal(launched,true);assert.equal(quit,true);
+});

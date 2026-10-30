@@ -7,7 +7,7 @@ async function launchUpdate(file,expected,portableTarget){
   if(portableTarget){
     lines.push(`$target = ${quote(portableTarget)}`,`$backup = $target + '.previous'`,`$done = $false`,`for ($i=0; $i -lt 60; $i++) {`,`  try { Copy-Item -LiteralPath $target -Destination $backup -Force; Copy-Item -LiteralPath $source -Destination $target -Force; $done = $true; break } catch { Start-Sleep -Seconds 1 }`,`}`,`if (-not $done) { throw 'Could not replace portable executable' }`,`Start-Process -FilePath $target`);
   }else lines.push(`Start-Process -FilePath $source`);
-  await fs.writeFile(script,lines.join('\r\n'),'utf8');
+  await fs.writeFile(script,'\ufeff'+lines.join('\r\n'),'utf8');
   const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script],{detached:true,stdio:'ignore',windowsHide:true});
   await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();
 }
