@@ -113,7 +113,7 @@ app.whenReady().then(async()=>{
     try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname,'assets/icon.ico'))); tray.on('click',showWindow); refreshTray(); } catch { tray = null; }
   }
   require('./studio-main')({win,handle,store,sendCommand,busyFiles});
-  require('./updater-main')({win,handle,isBusy:()=>activeRequests>0||!!store.current||busyFiles.size>0||trayState.state!=='idle',lock:()=>{updateInstalling=true;},unlock:()=>{updateInstalling=false;},quit:()=>{closing=true;app.quit();}});
+  require('./updater-main')({win,handle,isBusy:()=>activeRequests>0||!!store.current||busyFiles.size>0||(trayState.state!=='idle'||trayState.takingShot),lock:()=>{updateInstalling=true;},unlock:()=>{updateInstalling=false;},quit:()=>{closing=true;app.quit();}});
   handle('screenshot-hide',()=>{
     screenshotWasVisible=win.isVisible()&&!win.isMinimized();
     if(screenshotWasVisible) win.hide();
@@ -263,7 +263,7 @@ app.whenReady().then(async()=>{
   });
   handle('state',payload=>{
     if(!payload || !['idle','preparing','recording','paused','saving'].includes(payload.state)) return;
-    trayState={state:payload.state,elapsed:Number(payload.elapsed)||0};
+    trayState={state:payload.state,takingShot:payload.takingShot===true,elapsed:Number(payload.elapsed)||0};
     refreshTray();
   });
   handle('minimize',()=>win.minimize());

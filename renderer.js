@@ -35,7 +35,7 @@ function message(text,error=false,details='') {
 }
 function fail(prefix,error) {api.diagnosticLog(prefix,String(error)).catch(()=>{});const h=humanizeError(error);message((prefix?prefix+' ':'')+h.text,true,h.details);}
 
-function reportState() {window.studioReport?.();api.state({state,elapsed:Math.floor(elapsed/1000)}).catch(()=>{});}
+function reportState() {window.studioReport?.();api.state({state,takingShot,elapsed:Math.floor(elapsed/1000)}).catch(()=>{});}
 function updateUI() {
   const idle=state==='idle'&&!takingShot, active=['recording','paused'].includes(state);
   $('start').hidden=active;$('start').disabled=!idle||!source;
