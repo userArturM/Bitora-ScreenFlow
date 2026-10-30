@@ -21,7 +21,7 @@ module.exports=async({win,store,media,nativeImage})=>{
   // Real display video + synthetic microphone. No physical microphone required in CI.
   await js('navigator.mediaDevices.getUserMedia=async()=>{const ctx=new AudioContext();await ctx.resume();const osc=ctx.createOscillator(),dest=ctx.createMediaStreamDestination();osc.connect(dest);osc.start();window.__testAudio=ctx;return dest.stream;};$("mic").checked=true;start()');
   await wait('state==="recording"');
-  await new Promise(r=>setTimeout(r,1500));
+  await new Promise(r=>setTimeout(r,Number(process.env.BITORA_TEST_RECORD_MS)||1500));
   await js('pause()');
   assert.equal(await js('state'),'paused');
   const elapsed=await js('elapsed');
@@ -43,7 +43,7 @@ module.exports=async({win,store,media,nativeImage})=>{
   assert.ok(ffmpeg,'Bundled FFmpeg must be available');
   await media.repair(ffmpeg,video);
   const duration=await media.probeDuration(ffmpeg,video);
-  assert.ok(duration>1&&duration<15);
+  assert.ok(duration>1&&duration<100);
   assert.ok((await media.thumbnail(ffmpeg,video,duration))?.length>100);
   const decoded=await media.run(ffmpeg,['-v','error','-i',video,'-map','0:v:0','-map','0:a:0','-f','null','-'],{timeoutMs:20000});
   assert.equal(decoded.code,0,decoded.stderr);
@@ -58,6 +58,18 @@ module.exports=async({win,store,media,nativeImage})=>{
   // In-app streaming protocol must support video metadata and seeking.
   await js(`openPlayer({name:${JSON.stringify(files[0])}})`);
   await wait('Number.isFinite($("playerVideo").duration)&&$("playerVideo").duration>0');
+  await js('$("playerVideo").currentTime=1');
+  await wait('!$("playerVideo").seeking && Math.abs($("playerVideo").currentTime-1)<0.2 && $("playerVideo").readyState>=2');
+  await js('$("playerVideo").requestFullscreen()');
+  await wait('document.fullscreenElement===$("playerVideo")');
+  await js('document.exitFullscreen()');
+  await wait('!document.fullscreenElement');
+  await js('$("playerSpeed").value="1.5";$("playerSpeed").dispatchEvent(new Event("change"))');
+  assert.equal(await js('$("playerVideo").playbackRate'),1.5);
+  await js('$("trimRangeStart").value="0.2";$("trimRangeStart").dispatchEvent(new Event("input"));$("trimRangeEnd").value="1.2";$("trimRangeEnd").dispatchEvent(new Event("input"))');
+  assert.equal(await js('Number($("trimStart").value)'),0.2);assert.equal(await js('Number($("trimEnd").value)'),1.2);
+  await js('$("playerVideo").focus();document.dispatchEvent(new KeyboardEvent("keydown",{code:"ArrowRight",bubbles:true}))');
+  assert.ok(await js('$("playerVideo").currentTime>=1.2'));
   const clipped=await js(`api.trimVideo(${JSON.stringify(files[0])},0.2,1.2)`);
   const clipDuration=await media.probeDuration(ffmpeg,path.join(store.directory,clipped));
   assert.ok(clipDuration>0.8&&clipDuration<1.3,'Trim duration');
@@ -74,8 +86,14 @@ module.exports=async({win,store,media,nativeImage})=>{
   const cropCheck=await media.run(ffmpeg,['-i',path.join(store.directory,allVideos[0]),'-f','null','-'],{timeoutMs:20000});
   assert.equal(cropCheck.code,0);assert.match(cropCheck.stderr,/320x240/);
   await js('regionSelection=null');
+  // Model track removal without requiring a physical USB microphone on the runner.
+  await js('start()');await wait('state==="recording"');
+  await new Promise(r=>setTimeout(r,1200));
+  await js('microphone.getAudioTracks()[0].dispatchEvent(new Event("ended"))');await wait('state==="idle"',30000);
+  assert.ok(await js('$("message").textContent.includes("сохранено")||$("message").textContent.includes("отключено")'));
+
   await js('window.__testAudio.close();navigator.mediaDevices.getDisplayMedia=async()=>{throw new DOMException("Permission denied","NotAllowedError")};start()');
   assert.equal(await js('state'),'idle');
   assert.equal(await js('capture'),null);
-  return {passed:true,checks:['actual CI desktop capture','full-resolution idle PNG','PNG while recorder paused','pause/resume timer','WebM video and synthetic audio decode','FFmpeg repair and thumbnail','permission denial cleanup','editor save and clipboard','unified gallery','in-app playback','precise trim export','320x240 region recording and PNG'],screenshot:{width:first.width,height:first.height},duration};
+  return {passed:true,checks:['actual CI desktop capture','full-resolution idle PNG','PNG while recorder paused','pause/resume timer','WebM video and synthetic audio decode','FFmpeg repair and thumbnail','permission denial cleanup','editor save and clipboard','unified gallery','in-app playback, seek and fullscreen','precise trim export','320x240 region recording and PNG','playback speed and mouse range controls','simulated audio-device removal'],screenshot:{width:first.width,height:first.height},duration};
 };

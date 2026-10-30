@@ -3,6 +3,7 @@ name: Windows installer and portable
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -15,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +24,7 @@ jobs:
           node-version: '24'
           cache: npm
       - name: Synchronize dependency lock
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
@@ -125,6 +127,28 @@ jobs:
           $result = Get-Content "$env:BITORA_TEST_OUTPUT/result.json" -Raw | ConvertFrom-Json
           $result | ConvertTo-Json -Depth 5
           if (-not $result.normalizedPageAccepted) { throw 'Normalized path was not accepted' }
+      - name: DPI and extended recording regressions
+        shell: pwsh
+        run: |
+          foreach ($scale in @('1.25','1.5','2')) {
+            $env:BITORA_TEST_OUTPUT = Join-Path $env:RUNNER_TEMP "BitoraDPI-$scale"
+            $env:BITORA_TEST_RECORD_MS = '60000'
+            $p = Start-Process -FilePath "$pwd/release/win-unpacked/Bitora ScreenFlow.exe" -ArgumentList "--functional-test --force-device-scale-factor=$scale" -PassThru
+            if (-not $p.WaitForExit(210000)) { $p.Kill(); throw "DPI $scale timed out" }
+            if (Test-Path "$env:BITORA_TEST_OUTPUT/error.txt") { Get-Content "$env:BITORA_TEST_OUTPUT/error.txt" }
+            if ($p.ExitCode -ne 0) { throw "DPI $scale failed" }
+            Get-Content "$env:BITORA_TEST_OUTPUT/result.json"
+          }
+          Remove-Item Env:BITORA_TEST_RECORD_MS
+      - name: Real installed and portable update cycles
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v1.5.1 --repo userArturM/Bitora-ScreenFlow --pattern '*Setup*.exe' --pattern '*Portable*.exe' --dir qa-old
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download old release for update test' }
+          node qa/update-cycle.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Real update cycle failed' }
       - name: Checksums
         shell: pwsh
         run: |
@@ -140,8 +164,10 @@ jobs:
             release/*Setup*.exe
             release/*Portable*.exe
             release/SHA256SUMS.txt
+            release/update-cycle-results.json
           retention-days: 30
       - name: Publish release
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
