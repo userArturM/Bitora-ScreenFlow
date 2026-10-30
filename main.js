@@ -25,6 +25,7 @@ if (portableData) {
 app.setAppUserModelId('com.bitora.screenflow');
 const smokeTest=process.argv.includes('--smoke-test');
 if(smokeTest || functionalTest) setTimeout(()=>app.exit(2),functionalTest?90000:20000).unref();
+let activeRequests=0, updateInstalling=false;
 let win, store, settingsStore, config, selected, blocker, tray, closing = false, writeChain = Promise.resolve();
 let trayState = {state:'idle',elapsed:0}, trayKey = '';
 const busyFiles = new Set();
@@ -34,7 +35,7 @@ const screenshotFiles=new Map();
 const appPage=path.join(__dirname,'index.html');
 const page=pathToFileURL(appPage).href;
 function trusted(event) { if(!isTrustedSender(event,win?.webContents,appPage)) throw new Error('Доступ запрещён'); }
-function handle(name,fn) { ipcMain.handle(name,async(event,...args)=>{trusted(event);return fn(...args);}); }
+function handle(name,fn) { ipcMain.handle(name,async(event,...args)=>{trusted(event);if(updateInstalling) throw new Error('Приложение завершает работу для обновления'); activeRequests++; try{return await fn(...args);}finally{activeRequests--;}}); }
 function validFile(name) { return path.join(store.directory,S.validateRecordingName(name)); }
 function sendCommand(command) { if(win && !win.isDestroyed()) win.webContents.send('command',command); }
 function showWindow() { if(!win || win.isDestroyed()) return; if(win.isMinimized()) win.restore(); win.show(); win.focus(); }
@@ -95,7 +96,7 @@ app.whenReady().then(async()=>{
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',(e)=>e.preventDefault());
   session.defaultSession.setPermissionRequestHandler((contents,permission,callback)=>{
-    callback(contents===win.webContents && isTrustedFrame(contents,contents.mainFrame,appPage) && ['media','display-capture'].includes(permission));
+    callback(contents===win.webContents && isTrustedFrame(contents,contents.mainFrame,appPage) && ['media','display-capture','fullscreen'].includes(permission));
   });
   session.defaultSession.setDisplayMediaRequestHandler(async(request,callback)=>{
     try {
@@ -112,6 +113,7 @@ app.whenReady().then(async()=>{
     try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname,'assets/icon.ico'))); tray.on('click',showWindow); refreshTray(); } catch { tray = null; }
   }
   require('./studio-main')({win,handle,store,sendCommand,busyFiles});
+  require('./updater-main')({win,handle,isBusy:()=>activeRequests>0||!!store.current||busyFiles.size>0||trayState.state!=='idle',lock:()=>{updateInstalling=true;},unlock:()=>{updateInstalling=false;},quit:()=>{closing=true;app.quit();}});
   handle('screenshot-hide',()=>{
     screenshotWasVisible=win.isVisible()&&!win.isMinimized();
     if(screenshotWasVisible) win.hide();

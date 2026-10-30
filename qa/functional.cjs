@@ -58,6 +58,12 @@ module.exports=async({win,store,media,nativeImage})=>{
   // In-app streaming protocol must support video metadata and seeking.
   await js(`openPlayer({name:${JSON.stringify(files[0])}})`);
   await wait('Number.isFinite($("playerVideo").duration)&&$("playerVideo").duration>0');
+  await js('$("playerVideo").currentTime=1');
+  await wait('!$("playerVideo").seeking && Math.abs($("playerVideo").currentTime-1)<0.2 && $("playerVideo").readyState>=2');
+  await js('$("playerVideo").requestFullscreen()');
+  await wait('document.fullscreenElement===$("playerVideo")');
+  await js('document.exitFullscreen()');
+  await wait('!document.fullscreenElement');
   const clipped=await js(`api.trimVideo(${JSON.stringify(files[0])},0.2,1.2)`);
   const clipDuration=await media.probeDuration(ffmpeg,path.join(store.directory,clipped));
   assert.ok(clipDuration>0.8&&clipDuration<1.3,'Trim duration');
@@ -77,5 +83,5 @@ module.exports=async({win,store,media,nativeImage})=>{
   await js('window.__testAudio.close();navigator.mediaDevices.getDisplayMedia=async()=>{throw new DOMException("Permission denied","NotAllowedError")};start()');
   assert.equal(await js('state'),'idle');
   assert.equal(await js('capture'),null);
-  return {passed:true,checks:['actual CI desktop capture','full-resolution idle PNG','PNG while recorder paused','pause/resume timer','WebM video and synthetic audio decode','FFmpeg repair and thumbnail','permission denial cleanup','editor save and clipboard','unified gallery','in-app playback','precise trim export','320x240 region recording and PNG'],screenshot:{width:first.width,height:first.height},duration};
+  return {passed:true,checks:['actual CI desktop capture','full-resolution idle PNG','PNG while recorder paused','pause/resume timer','WebM video and synthetic audio decode','FFmpeg repair and thumbnail','permission denial cleanup','editor save and clipboard','unified gallery','in-app playback, seek and fullscreen','precise trim export','320x240 region recording and PNG'],screenshot:{width:first.width,height:first.height},duration};
 };
