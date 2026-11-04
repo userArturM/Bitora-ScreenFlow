@@ -7,8 +7,12 @@ function installScript(file,expected,portableTarget,{parentPid=process.pid,insta
   `$source = ${quote(file)}`,`$target = ${quote(target)}`,`$report = ${quote(statusFile)}`,`$swapped = $false`,`$health = $null`,
   `$backup = $target + '.previous.exe'`,`$stage = $target + '.next.exe'`,
   `function Report($status, $message) { @{status=$status; message=$message; time=(Get-Date).ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath $report -Encoding UTF8 }`,
+  `Write-Output 'Helper started'`,
   `try {`,
-  `  Wait-Process -Id ${Number(parentPid)} -ErrorAction SilentlyContinue`,
+  `  Write-Output 'Waiting for application exit'`,
+  `  Wait-Process -Id ${Number(parentPid)} -Timeout 60 -ErrorAction SilentlyContinue`,
+  `  if (Get-Process -Id ${Number(parentPid)} -ErrorAction SilentlyContinue) { throw 'Application did not exit; update cancelled' }`,
+  `  Write-Output 'Verifying checksum'`,
   `  if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLower() -ne ${quote(expected)}) { throw 'SHA-256 mismatch; no files replaced' }`,
   ...(portableTarget?[
    `  Copy-Item -LiteralPath $source -Destination $stage -Force`,
@@ -20,9 +24,13 @@ function installScript(file,expected,portableTarget,{parentPid=process.pid,insta
    `  if (-not $done) { throw 'Could not replace portable executable; original preserved' }`
   ]:[
    `  $arguments = '/S /D=' + (Split-Path -Parent $target)`,
-   `  $installer = Start-Process -FilePath $source -ArgumentList $arguments -PassThru -Wait`,
+   `  Write-Output 'Starting installer'`,
+   `  $installer = Start-Process -FilePath $source -ArgumentList $arguments -PassThru`,
+   `  if (-not $installer.WaitForExit(120000)) { throw 'Installer did not exit within 120 seconds; check installer window' }`,
+   `  Write-Output ('Installer exited: ' + $installer.ExitCode)`,
    `  if ($installer.ExitCode -ne 0) { throw ('Installer exit code: ' + $installer.ExitCode) }`
   ]),
+  `  Write-Output 'Checking updated application'`,
   `  $health = Start-Process -FilePath $target -ArgumentList '--update-health' -PassThru`,
   `  if (-not $health.WaitForExit(60000)) { $health.Kill(); throw 'Updated app startup timed out' }`,
   `  if ($health.ExitCode -ne 0) { throw ('Updated app startup failed: ' + $health.ExitCode) }`,
