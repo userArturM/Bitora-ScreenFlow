@@ -57,10 +57,22 @@ function installScript(file,expected,portableTarget,{parentPid=process.pid,insta
 }
 async function launchUpdate(file,expected,portableTarget,options){
  if(process.platform!=='win32')throw new Error('Установка обновлений поддерживается в Windows');
- const script=path.join(path.dirname(file),'install-update.ps1');
- await fs.writeFile(script,'\ufeff'+installScript(file,expected,portableTarget,options),'utf8');
- const log=await fs.open(path.join(path.dirname(file),'install-helper.log'),'a');
- const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script],{detached:true,stdio:['ignore',log.fd,log.fd],windowsHide:true});
- try{await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();}finally{await log.close();}
+ const directory=path.dirname(file),script=path.join(directory,'install-update.ps1');
+ const marker=path.join(directory,'helper-started.txt');await fs.rm(marker,{force:true});
+ const code=`Set-Content -LiteralPath ${quote(marker)} -Value 'ready' -Encoding ASCII\r\n`+installScript(file,expected,portableTarget,options);
+ await fs.writeFile(script,'\ufeff'+code,'utf8');
+ const log=await fs.open(path.join(directory,'install-helper.log'),'a');
+ const executable=path.join(process.env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
+ const child=spawn(executable,['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(code,'utf16le').toString('base64')],{stdio:['ignore',log.fd,log.fd],windowsHide:true});
+ let failed;child.once('error',e=>{failed=e;});child.once('exit',code=>{failed=new Error('Помощник обновления завершился до запуска: '+code);});
+ try{
+   const deadline=Date.now()+15000;
+   while(!await fs.access(marker).then(()=>true,()=>false)){
+     if(failed)throw failed;
+     if(Date.now()>deadline){child.kill();throw new Error('Помощник обновления не запустился. Программа остаётся открытой; проверьте install-helper.log.');}
+     await new Promise(r=>setTimeout(r,100));
+   }
+   child.unref();
+ }finally{await log.close();}
 }
 module.exports={launchUpdate,installScript};
