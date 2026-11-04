@@ -7,12 +7,13 @@ function installScript(file,expected,portableTarget,{parentPid=process.pid,insta
   `$source = ${quote(file)}`,`$target = ${quote(target)}`,`$report = ${quote(statusFile)}`,`$swapped = $false`,`$health = $null`,
   `$backup = $target + '.previous.exe'`,`$stage = $target + '.next.exe'`,
   `function Report($status, $message) { @{status=$status; message=$message; time=(Get-Date).ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath $report -Encoding UTF8 }`,
-  `Write-Output 'Helper started'`,
+  `function Trace($text) { [System.IO.File]::AppendAllText(${quote(path.join(path.dirname(file),'install-helper.log'))}, $text + [Environment]::NewLine) }`,
+  `Trace 'Helper started'`,
   `try {`,
-  `  Write-Output 'Waiting for application exit'`,
+  `  Trace 'Waiting for application exit'`,
   `  Wait-Process -Id ${Number(parentPid)} -Timeout 60 -ErrorAction SilentlyContinue`,
   `  if (Get-Process -Id ${Number(parentPid)} -ErrorAction SilentlyContinue) { throw 'Application did not exit; update cancelled' }`,
-  `  Write-Output 'Verifying checksum'`,
+  `  Trace 'Verifying checksum'`,
   `  if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLower() -ne ${quote(expected)}) { throw 'SHA-256 mismatch; no files replaced' }`,
   ...(portableTarget?[
    `  Copy-Item -LiteralPath $source -Destination $stage -Force`,
@@ -24,13 +25,13 @@ function installScript(file,expected,portableTarget,{parentPid=process.pid,insta
    `  if (-not $done) { throw 'Could not replace portable executable; original preserved' }`
   ]:[
    `  $arguments = '/S /D=' + (Split-Path -Parent $target)`,
-   `  Write-Output 'Starting installer'`,
+   `  Trace 'Starting installer'`,
    `  $installer = Start-Process -FilePath $source -ArgumentList $arguments -PassThru`,
    `  if (-not $installer.WaitForExit(120000)) { throw 'Installer did not exit within 120 seconds; check installer window' }`,
-   `  Write-Output ('Installer exited: ' + $installer.ExitCode)`,
+   `  Trace ('Installer exited: ' + $installer.ExitCode)`,
    `  if ($installer.ExitCode -ne 0) { throw ('Installer exit code: ' + $installer.ExitCode) }`
   ]),
-  `  Write-Output 'Checking updated application'`,
+  `  Trace 'Checking updated application'`,
   `  $health = Start-Process -FilePath $target -ArgumentList '--update-health' -PassThru`,
   `  if (-not $health.WaitForExit(60000)) { $health.Kill(); throw 'Updated app startup timed out' }`,
   `  if ($health.ExitCode -ne 0) { throw ('Updated app startup failed: ' + $health.ExitCode) }`,
@@ -59,7 +60,7 @@ async function launchUpdate(file,expected,portableTarget,options){
  if(process.platform!=='win32')throw new Error('Установка обновлений поддерживается в Windows');
  const directory=path.dirname(file),script=path.join(directory,'install-update.ps1');
  const marker=path.join(directory,'helper-started.txt');await fs.rm(marker,{force:true});
- const code=`$ProgressPreference = 'SilentlyContinue'\r\nStart-Transcript -LiteralPath ${quote(path.join(directory,'install-helper.log'))} -Append | Out-Null\r\nSet-Content -LiteralPath ${quote(marker)} -Value 'ready' -Encoding ASCII\r\n`+installScript(file,expected,portableTarget,options);
+ const code=`$ProgressPreference = 'SilentlyContinue'\r\nSet-Content -LiteralPath ${quote(marker)} -Value 'ready' -Encoding ASCII\r\n`+installScript(file,expected,portableTarget,options);
  await fs.writeFile(script,'\ufeff'+code,'utf8');
  const executable=path.join(process.env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
  const child=spawn(executable,['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(code,'utf16le').toString('base64')],{detached:true,stdio:'ignore',windowsHide:true});
