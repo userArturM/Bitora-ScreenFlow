@@ -37,13 +37,14 @@ if(process.argv[2]==='--worker'){
   try{
    const base='https://github.com/userArturM/Bitora-ScreenFlow/releases/download/v'+version+'/';
    const fetchFixture=async(url,options)=>url.includes('api.github.com')?Response.json({tag_name:'v'+version,assets:[{name,size,browser_download_url:base+name},{name:'SHA256SUMS.txt',browser_download_url:base+'SHA256SUMS.txt'}]}):url.endsWith('.txt')?new Response(hash+'  '+name):fetch(`http://127.0.0.1:${server.address().port}/asset`,options);
-   const directory=path.join(folder,'Updates');let updater=new Updater({fetch:fetchFixture,current:'1.5.1',directory,portable:kind==='Portable'});assert.equal((await updater.check()).phase,'available');
+   const directory=path.join(root,'Downloads-'+kind);let updater=new Updater({fetch:fetchFixture,current:'1.5.1',directory,portable:kind==='Portable'});assert.equal((await updater.check()).phase,'available');
    // Seed a real prefix to verify continuation across application restarts.
    await fs.mkdir(directory,{recursive:true});const prefix=Buffer.alloc(1024*1024);const h=await fs.open(asset,'r');await h.read(prefix,0,prefix.length,0);await h.close();
    await fs.writeFile(path.join(directory,name+'.part'),prefix);
    await fs.writeFile(path.join(directory,name+'.part.json'),JSON.stringify({url:base+name,size,expected:hash}));
    await updater.download();assert.ok(resumed,'HTTP Range must be used');const downloaded=await updater.verify();
    const healthReport=path.join(root,'health-'+kind+'.json');process.env.BITORA_UPDATE_HEALTH_REPORT=healthReport;
+   console.log('Installing '+kind+'; download verified');
    const result=await install(downloaded,target,kind==='Portable'?target:null,path.join(directory,'install-result.json'));
    assert.equal(result.status,'success',JSON.stringify(result));
    assert.equal(JSON.parse(await fs.readFile(healthReport,'utf8')).version,version);

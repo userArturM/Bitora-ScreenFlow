@@ -51,7 +51,8 @@ async function launchUpdate(file,expected,portableTarget,options){
  if(process.platform!=='win32')throw new Error('Установка обновлений поддерживается в Windows');
  const script=path.join(path.dirname(file),'install-update.ps1');
  await fs.writeFile(script,'\ufeff'+installScript(file,expected,portableTarget,options),'utf8');
- const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script],{detached:true,stdio:'ignore',windowsHide:true});
- await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();
+ const log=await fs.open(path.join(path.dirname(file),'install-helper.log'),'a');
+ const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script],{detached:true,stdio:['ignore',log.fd,log.fd],windowsHide:true});
+ try{await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();}finally{await log.close();}
 }
 module.exports={launchUpdate,installScript};

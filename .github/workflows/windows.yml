@@ -149,6 +149,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Could not download old release for update test' }
           node qa/update-cycle.cjs
           if ($LASTEXITCODE -ne 0) { throw 'Real update cycle failed' }
+      - name: Update diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "Bitora Update 'Артур' #100%"
+          if (Test-Path -LiteralPath $root) {
+            Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.Name -match 'install.*(log|json)$|health.*json$' } | ForEach-Object { Write-Host $_.FullName; Get-Content -LiteralPath $_.FullName }
+          }
       - name: Checksums
         shell: pwsh
         run: |
