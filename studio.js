@@ -69,7 +69,7 @@ let updatePoll;
 function showUpdate(r){
   const labels={checking:'Проверяем обновления…',idle:'Проверьте обновления',available:'Обновление доступно',current:'Новых совместимых обновлений нет',downloading:'Скачивание: '+((r.received||0)/1048576).toFixed(1)+' МБ',ready:'SHA-256 проверен. Можно установить.',queued:'Установка начнётся после завершения операций.',installing:'Запуск установки…',error:r.error};
   $('updateNotes').textContent=[labels[r.phase],r.version?'Версия: '+r.version:'',r.notes||'',r.error||''].filter(Boolean).join('\n\n');
-  $('updateDownload').textContent=r.received?'Продолжить скачивание':'Скачать обновление';$('updateCancel').disabled=!['downloading','queued'].includes(r.phase);$('updateDownload').disabled=r.phase!=='available';$('updateInstall').disabled=r.phase!=='ready';
+  $('updateDownload').textContent=r.received?'Продолжить скачивание':'Скачать обновление';$('updateCancel').disabled=!['downloading','queued'].includes(r.phase);$('updateDownload').disabled=r.phase!=='available';$('updateInstall').disabled=r.phase!=='ready'||r.installSupported===false;if(r.installSupported===false)$('updateNotes').textContent+='\n\nПредварительная версия: автоматическая установка отключена. Обновляйтесь вручную через страницу релизов.';
 }
 $('updates').onclick=async()=>{$('updatesDialog').showModal();$('updateDownload').disabled=true;$('updateInstall').disabled=true;try{showUpdate(await api.updatesCheck());}catch(e){$('updateNotes').textContent=e.message;}clearInterval(updatePoll);updatePoll=setInterval(()=>api.updatesStatus().then(showUpdate).catch(()=>{}),1000);};
 $('updateDownload').onclick=async()=>{try{$('updateDownload').disabled=true;showUpdate(await api.updatesDownload());}catch(e){$('updateNotes').textContent=e.message;}};

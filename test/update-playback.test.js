@@ -34,3 +34,13 @@ test('installer scripts stage portable updates atomically and retain rollback/er
  const {installScript}=require('../update-install');const script=installScript("C:\\Артур's\\new.exe",'a'.repeat(64),'C:\\portable.exe',{parentPid:123,restart:false});
  assert.match(script,/File\]::Replace\(\$stage, \$target, \$backup/);assert.match(script,/rolled-back/);assert.match(script,/--update-health/);assert.match(script,/Артур''s/);assert.match(script,/Wait-Process -Id 123/);
 });
+test('release candidate cannot queue automatic installation',async()=>{
+ const vm=require('node:vm'),handlers={};
+ class FakeUpdater{constructor(){this.state={phase:'ready'};}}
+ const context={module:{exports:{}},process:{env:{}},setInterval:()=>({unref(){}}),clearInterval(){},require:name=>name==='electron'?{app:{getVersion:()=> '1.6.0-rc.1',getPath:()=>'/tmp'},net:{},shell:{}}:name==='./updater'?{Updater:FakeUpdater}:name==='./update-install'?{launchUpdate:()=>{throw new Error('must not launch');}}:require(name)};
+ vm.runInNewContext(await fs.readFile(path.join(__dirname,'../updater-main.js'),'utf8'),context);
+ context.module.exports({win:{on(){}},handle:(name,fn)=>handlers[name]=fn,isBusy:()=>false,lock(){},unlock(){},quit(){}});
+ assert.equal(handlers['updates-status']().installSupported,false);
+ assert.throws(()=>handlers['updates-install'](),/отключена/);
+ assert.equal(handlers['updates-status']().phase,'ready');
+});

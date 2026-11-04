@@ -22,6 +22,12 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Release configuration
+        id: release_config
+        shell: pwsh
+        run: |
+          $preview = node -p "require('./package.json').version.includes('-')"
+          "prerelease=$preview" >> $env:GITHUB_OUTPUT
       - name: Synchronize dependency lock
         if: github.ref == 'refs/heads/main'
         shell: pwsh
@@ -140,6 +146,7 @@ jobs:
           }
           Remove-Item Env:BITORA_TEST_RECORD_MS
       - name: Real installed and portable update cycles
+        if: steps.release_config.outputs.prerelease != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -174,7 +181,7 @@ jobs:
             release/update-cycle-results.json
           retention-days: 30
       - name: Publish release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || steps.release_config.outputs.prerelease == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -183,7 +190,9 @@ jobs:
           $tag = "v$version"
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target (git rev-parse HEAD) --title "Bitora ScreenFlow $version" --notes-file RELEASE_NOTES.md
+            $previewArgs = @()
+            if ($version.Contains('-')) { $previewArgs = @('--prerelease') }
+            gh release create $tag --target (git rev-parse HEAD) --title "Bitora ScreenFlow $version" --notes-file RELEASE_NOTES.md @previewArgs
             if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
           }
           gh release upload $tag (Get-ChildItem release/*Setup*.exe).FullName (Get-ChildItem release/*Portable*.exe).FullName release/SHA256SUMS.txt --clobber
