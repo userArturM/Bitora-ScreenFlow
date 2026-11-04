@@ -1,6 +1,7 @@
 name: Detached updater helper
 on:
-  pull_request:
+  push:
+    branches: [main, fix/playback-and-verified-updates]
   workflow_dispatch:
 permissions:
   contents: read

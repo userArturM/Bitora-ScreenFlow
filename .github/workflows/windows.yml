@@ -2,8 +2,7 @@ name: Windows installer and portable
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: [main, fix/playback-and-verified-updates]
   workflow_dispatch:
 
 permissions:
