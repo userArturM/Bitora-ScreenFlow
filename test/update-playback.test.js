@@ -47,3 +47,10 @@ test('release candidate cannot queue automatic installation',async()=>{
  assert.throws(()=>handlers['updates-install'](),/отключена/);
  assert.equal(handlers['updates-status']().phase,'ready');
 });
+
+test('stable release upgrades same-version candidate without accepting preview releases',()=>{
+ assert.equal(newer('v1.6.0','1.6.0-rc.1'),true);
+ assert.equal(newer('v1.6.1','1.6.0-rc.1'),true);
+ assert.equal(newer('v1.5.1','1.6.0-rc.1'),false);
+ assert.equal(newer('v1.6.0-rc.2','1.6.0-rc.1'),false);
+});

@@ -1,7 +1,12 @@
 const fs=require('node:fs/promises'),path=require('node:path');
 const {createHash}=require('node:crypto');
 const ROOT='https://github.com/userArturM/Bitora-ScreenFlow';
-function newer(a,b){const parse=s=>/^v?(\d+)\.(\d+)\.(\d+)$/.exec(s)?.slice(1).map(Number);const x=parse(a),y=parse(b);if(!x||!y)return false;for(let i=0;i<3;i++){if(x[i]!==y[i])return x[i]>y[i];}return false;}
+function newer(a,b){
+ const candidate=/^v?(\d+)\.(\d+)\.(\d+)$/.exec(a),current=/^v?(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/.exec(b);
+ if(!candidate||!current)return false;
+ for(let i=1;i<=3;i++){if(Number(candidate[i])!==Number(current[i]))return Number(candidate[i])>Number(current[i]);}
+ return !!current[4];
+}
 function assetURL(value){const u=new URL(value);if(!value.startsWith(ROOT+'/releases/download/')||u.protocol!=='https:'||u.username||u.password)throw new Error('Недопустимый адрес обновления');return value;}
 function checksum(text,name){const rows=text.split(/\r?\n/).map(l=>/^([a-f0-9]{64})\s+\*?(.+)$/i.exec(l)).filter(m=>m&&m[2]===name);if(rows.length!==1)throw new Error('SHA-256 для файла не найден или неоднозначен');return rows[0][1].toLowerCase();}
 async function hashFile(file){const hash=createHash('sha256');for await(const chunk of require('node:fs').createReadStream(file))hash.update(chunk);return hash.digest('hex');}
