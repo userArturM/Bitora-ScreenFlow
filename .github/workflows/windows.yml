@@ -43,6 +43,9 @@ jobs:
             git push origin HEAD:main
             if ($LASTEXITCODE -ne 0) { throw 'Could not persist lock update; branch changed' }
           }
+      - name: Build independent update helper
+        shell: powershell
+        run: ./qa/build-update-helper.ps1
       - run: npm ci
       - name: Ensure FFmpeg binary
         run: node node_modules/ffmpeg-static/install.js

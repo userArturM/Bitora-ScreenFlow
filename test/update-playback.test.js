@@ -30,9 +30,12 @@ test('cancelled downloads resume across updater instances and validate the compl
  updater=new Updater({fetch,current:'1.5.1',directory:dir});await updater.check();assert.equal((await updater.download()).phase,'available');assert.equal((await fs.stat(path.join(dir,name+'.part'))).size,4);
  updater=new Updater({fetch,current:'1.5.1',directory:dir});await updater.check();await updater.download();assert.equal(range,'bytes=4-');assert.equal(await require('../updater').hashFile(await updater.verify()),hash);
 });
-test('installer scripts stage portable updates atomically and retain rollback/error reporting',()=>{
- const {installScript}=require('../update-install');const script=installScript("C:\\Артур's\\new.exe",'a'.repeat(64),'C:\\portable.exe',{parentPid:123,restart:false});
- assert.match(script,/File\]::Replace\(\$stage, \$target, \$backup/);assert.match(script,/rolled-back/);assert.match(script,/--update-health/);assert.match(script,/Артур''s/);assert.match(script,/Wait-Process -Id 123/);
+test('installer manifest preserves special paths and validates checksum',()=>{
+ const {installManifest}=require('../update-install');const source="C:/Артур's #100%/new.exe",target='C:/portable.exe';
+ const m=installManifest(source,'a'.repeat(64),target,{parentPid:123,restart:false});
+ assert.equal(m.source,source);assert.equal(m.target,target);assert.equal(m.parentPid,123);assert.equal(m.portable,true);assert.equal(m.restart,false);
+ assert.throws(()=>installManifest(source,'invalid',target),/SHA-256/);
+ assert.notEqual(m.marker,installManifest(source,'a'.repeat(64),target).marker);
 });
 test('release candidate cannot queue automatic installation',async()=>{
  const vm=require('node:vm'),handlers={};

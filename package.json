@@ -1,6 +1,6 @@
 {
   "name": "bitora-screenflow",
-  "version": "1.6.0-rc.1",
+  "version": "1.6.0",
   "description": "Локальная запись экрана",
   "author": "Bitora",
   "license": "MIT",
@@ -57,7 +57,8 @@
       "media-response.js",
       "updater.js",
       "updater-main.js",
-      "update-install.js"
+      "update-install.js",
+      "assets/update-helper.exe"
     ],
     "asar": true,
     "win": {
@@ -102,7 +103,8 @@
     },
     "publish": null,
     "asarUnpack": [
-      "node_modules/ffmpeg-static/**"
+      "node_modules/ffmpeg-static/**",
+      "assets/update-helper.exe"
     ]
   }
 }
