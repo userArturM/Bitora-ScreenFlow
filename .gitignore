@@ -7,3 +7,4 @@ BitoraScreenFlow-Data/
 .env
 .env.*
 !.env.example
+assets/update-helper.exe

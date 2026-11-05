@@ -1,0 +1,20 @@
+name: Detached updater helper
+on:
+  push:
+    branches: [main, fix/playback-and-verified-updates]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  helper:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build independent update helper
+        shell: powershell
+        run: ./qa/build-update-helper.ps1
+      - run: node qa/helper-smoke.cjs
