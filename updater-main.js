@@ -16,7 +16,7 @@ module.exports=({win,handle,isBusy,lock,unlock,quit})=>{
   const timer=setInterval(async()=>{
     if(updater.state.phase!=='queued'||isBusy())return;
     lock();updater.state.phase='installing';
-    try{const file=await updater.verify();await launchUpdate(file,updater.ready.expected,process.env.PORTABLE_EXECUTABLE_FILE);quit();}
+    try{const file=await updater.verify();await launchUpdate(file,updater.ready.expected,process.env.PORTABLE_EXECUTABLE_FILE,{expectedVersion:String(updater.state.version||'').replace(/^v/,'')});quit();}
     catch(e){unlock();updater.state={...updater.state,phase:updater.ready?'ready':'available',error:e.message};}
   },500);
   timer.unref();win.on('closed',()=>clearInterval(timer));

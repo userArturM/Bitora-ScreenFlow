@@ -1,9 +1,9 @@
 const fs=require('node:fs/promises'),path=require('node:path'),{spawn}=require('node:child_process');
 const {randomUUID}=require('node:crypto');
-function installManifest(file,expected,portableTarget,{parentPid=process.pid,installedTarget=process.execPath,restart=true,statusFile=path.join(path.dirname(file),'install-result.json')}={}){
+function installManifest(file,expected,portableTarget,{parentPid=process.pid,installedTarget=process.execPath,restart=true,expectedVersion=null,statusFile=path.join(path.dirname(file),'install-result.json')}={}){
  if(!/^[a-f0-9]{64}$/i.test(expected))throw new Error('Недопустимая SHA-256');
  const directory=path.dirname(file);
- return {source:file,target:portableTarget||installedTarget,expected:expected.toLowerCase(),portable:!!portableTarget,parentPid,restart,report:statusFile,marker:path.join(directory,'helper-'+randomUUID()+'.ready'),log:path.join(directory,'install-helper.log'),healthReport:process.env.BITORA_UPDATE_HEALTH_REPORT||path.join(directory,'update-health.json')};
+ return {source:file,target:portableTarget||installedTarget,expected:expected.toLowerCase(),portable:!!portableTarget,parentPid,restart,expectedVersion,report:statusFile,marker:path.join(directory,'helper-'+randomUUID()+'.ready'),log:path.join(directory,'install-helper.log'),healthReport:process.env.BITORA_UPDATE_HEALTH_REPORT||path.join(directory,'update-health.json')};
 }
 async function launchUpdate(file,expected,portableTarget,options){
  if(process.platform!=='win32')throw new Error('Установка обновлений поддерживается в Windows');

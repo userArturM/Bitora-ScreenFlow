@@ -4,7 +4,7 @@ const {spawn,execFileSync}=require('node:child_process');
 const {Updater,hashFile}=require('../updater');
 const {launchUpdate}=require('../update-install');
 if(process.argv[2]==='--worker'){
- (async()=>{const data=JSON.parse(await fs.readFile(process.argv[3],'utf8'));await launchUpdate(data.file,data.hash,data.portable,{installedTarget:data.target,restart:false,statusFile:data.report});})().catch(e=>{console.error(e);process.exitCode=1;});
+ (async()=>{const data=JSON.parse(await fs.readFile(process.argv[3],'utf8'));await launchUpdate(data.file,data.hash,data.portable,{installedTarget:data.target,restart:false,expectedVersion:require('../package.json').version,statusFile:data.report});})().catch(e=>{console.error(e);process.exitCode=1;});
 }else{
 (async()=>{
  const root=path.join(process.env.RUNNER_TEMP||process.cwd(),"Bitora Update 'Артур' #100%");await fs.mkdir(root,{recursive:true});

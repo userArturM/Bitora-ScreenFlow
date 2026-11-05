@@ -7,7 +7,7 @@ using System.Runtime.Serialization.Json;
 using System.Threading;
 
 [DataContract] class Manifest {
- [DataMember] public string source, target, expected, report, marker, log, healthReport;
+ [DataMember] public string source, target, expected, report, marker, log, healthReport, expectedVersion;
  [DataMember] public int parentPid;
  [DataMember] public bool portable, restart;
 }
@@ -66,6 +66,7 @@ class UpdateHelper {
    health=Process.Start(info);
    if(!health.WaitForExit(60000)) {health.Kill();health.WaitForExit(10000);throw new Exception("Updated app startup timed out");}
    if(health.ExitCode!=0 || !File.Exists(m.healthReport) || !Read<Health>(m.healthReport).passed)throw new Exception("Updated app startup failed");
+   if(!String.IsNullOrEmpty(m.expectedVersion) && Read<Health>(m.healthReport).version!=m.expectedVersion)throw new Exception("Installed version does not match downloaded release");
    Report("success","Update installed and startup verified");
    if(m.restart)Start(m.target,"");
    return 0;

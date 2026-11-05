@@ -46,6 +46,8 @@ jobs:
       - name: Build independent update helper
         shell: powershell
         run: ./qa/build-update-helper.ps1
+      - name: Verify detached helper and checksum rejection
+        run: node qa/helper-smoke.cjs
       - run: npm ci
       - name: Ensure FFmpeg binary
         run: node node_modules/ffmpeg-static/install.js
